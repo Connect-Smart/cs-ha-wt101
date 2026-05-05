@@ -1,4 +1,9 @@
-"""Config flow for the Milesight WT101 climate integration."""
+"""Config flow for the Milesight WT101 climate integration.
+
+Architecture: one **hub** config entry per LoRaWAN application (TTN application or
+ChirpStack application). Each thermostat is added as a **subentry** under that hub
+so all knoppen share one set of credentials.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +14,14 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlowResult,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
+)
 from homeassistant.const import CONF_NAME
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -29,6 +41,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_CS_API_TOKEN,
     CONF_CS_APPLICATION_ID,
+    CONF_CS_APPLICATION_NAME,
     CONF_CS_BASE_URL,
     CONF_CS_DEV_EUI,
     CONF_CURRENT_TEMP_SENSOR,
@@ -51,6 +64,7 @@ from .const import (
     DOMAIN,
     PLATFORM_CHIRPSTACK,
     PLATFORM_TTN,
+    SUBENTRY_TYPE_THERMOSTAT,
     WT101_BRAND_KEYS,
     WT101_MODEL_KEYS,
 )
@@ -64,37 +78,39 @@ class _ApiError(Exception):
     """Raised when the upstream LoRaWAN API rejects a request or is unreachable."""
 
 
+# =====================================================================
+# Hub flow — one entry per TTN/ChirpStack application
+# =====================================================================
 class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Multi-step UI flow for adding one WT101 thermostat per entry."""
+    """Add a LoRaWAN application as a hub. Thermostats are added as subentries."""
 
     VERSION = 1
 
     def __init__(self) -> None:
-        self._common: dict[str, Any] = {}
+        self._platform: str | None = None
         self._creds: dict[str, Any] = {}
-        self._device_options: list[SelectOptionDict] = []
         self._app_options: list[SelectOptionDict] = []
 
-    # --------------------------------------------------------------- shared
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Allow adding thermostats as subentries under the hub."""
+        return {SUBENTRY_TYPE_THERMOSTAT: ThermostatSubentryFlow}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Collect name, sensors, platform choice and limits."""
+    ) -> ConfigFlowResult:
+        """Choose TTN or ChirpStack."""
         if user_input is not None:
-            self._common = user_input
-            if user_input[CONF_PLATFORM_TYPE] == PLATFORM_TTN:
-                return await self.async_step_ttn_creds()
-            return await self.async_step_chirpstack_creds()
+            self._platform = user_input[CONF_PLATFORM_TYPE]
+            if self._platform == PLATFORM_TTN:
+                return await self.async_step_ttn()
+            return await self.async_step_chirpstack()
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME): str,
-                vol.Required(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Required(CONF_TARGET_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
                 vol.Required(
                     CONF_PLATFORM_TYPE, default=PLATFORM_TTN
                 ): SelectSelector(
@@ -110,6 +126,192 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         ],
                         mode=SelectSelectorMode.DROPDOWN,
                     )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    # --- TTN hub: server URL + application id + API key ---------------
+    async def async_step_ttn(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                # Validate creds by listing devices.
+                await _ttn_list_devices(
+                    self.hass,
+                    user_input[CONF_TTN_BASE_URL],
+                    user_input[CONF_TTN_APPLICATION_ID],
+                    user_input[CONF_TTN_API_KEY],
+                )
+            except _ApiError as err:
+                _LOGGER.warning("TTN validation failed: %s", err)
+                errors["base"] = "cannot_connect"
+            else:
+                unique = (
+                    f"ttn:{user_input[CONF_TTN_BASE_URL].rstrip('/')}"
+                    f":{user_input[CONF_TTN_APPLICATION_ID]}"
+                )
+                await self.async_set_unique_id(unique)
+                self._abort_if_unique_id_configured()
+                title = f"TTN: {user_input[CONF_TTN_APPLICATION_ID]}"
+                return self.async_create_entry(
+                    title=title,
+                    data={CONF_PLATFORM_TYPE: PLATFORM_TTN, **user_input},
+                )
+
+        defaults = self._creds
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_TTN_BASE_URL,
+                    default=defaults.get(CONF_TTN_BASE_URL, DEFAULT_TTN_BASE_URL),
+                ): str,
+                vol.Required(
+                    CONF_TTN_APPLICATION_ID,
+                    default=defaults.get(CONF_TTN_APPLICATION_ID, ""),
+                ): str,
+                vol.Required(
+                    CONF_TTN_API_KEY,
+                    default=defaults.get(CONF_TTN_API_KEY, ""),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            }
+        )
+        return self.async_show_form(
+            step_id="ttn", data_schema=schema, errors=errors
+        )
+
+    # --- ChirpStack hub: creds + pick one application -----------------
+    async def async_step_chirpstack(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._creds = dict(user_input)
+            try:
+                apps = await _cs_list_applications(
+                    self.hass,
+                    user_input[CONF_CS_BASE_URL],
+                    user_input[CONF_CS_API_TOKEN],
+                )
+            except _ApiError as err:
+                _LOGGER.warning(
+                    "ChirpStack discovery failed (%s); allowing manual app entry",
+                    err,
+                )
+                self._app_options = []
+            else:
+                self._app_options = [
+                    SelectOptionDict(value=a["id"], label=a["label"]) for a in apps
+                ]
+            return await self.async_step_chirpstack_app()
+
+        defaults = self._creds
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_CS_BASE_URL,
+                    default=defaults.get(CONF_CS_BASE_URL, DEFAULT_CS_BASE_URL),
+                ): str,
+                vol.Required(
+                    CONF_CS_API_TOKEN,
+                    default=defaults.get(CONF_CS_API_TOKEN, ""),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            }
+        )
+        return self.async_show_form(
+            step_id="chirpstack", data_schema=schema, errors=errors
+        )
+
+    async def async_step_chirpstack_app(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            app_id = user_input[CONF_CS_APPLICATION_ID]
+            if app_id == _MANUAL_ENTRY:
+                return await self.async_step_chirpstack_app_manual()
+            label = next(
+                (o["label"] for o in self._app_options if o["value"] == app_id),
+                app_id,
+            )
+            return await self._finish_chirpstack(app_id, label)
+
+        options = list(self._app_options) + [
+            SelectOptionDict(value=_MANUAL_ENTRY, label="Manual entry…")
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_CS_APPLICATION_ID): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options, mode=SelectSelectorMode.DROPDOWN
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="chirpstack_app", data_schema=schema)
+
+    async def async_step_chirpstack_app_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            app_id = user_input[CONF_CS_APPLICATION_ID].strip()
+            return await self._finish_chirpstack(app_id, app_id)
+        schema = vol.Schema({vol.Required(CONF_CS_APPLICATION_ID): str})
+        return self.async_show_form(
+            step_id="chirpstack_app_manual", data_schema=schema
+        )
+
+    async def _finish_chirpstack(
+        self, application_id: str, application_label: str
+    ) -> ConfigFlowResult:
+        unique = (
+            f"chirpstack:{self._creds[CONF_CS_BASE_URL].rstrip('/')}"
+            f":{application_id}"
+        )
+        await self.async_set_unique_id(unique)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title=f"ChirpStack: {application_label}",
+            data={
+                CONF_PLATFORM_TYPE: PLATFORM_CHIRPSTACK,
+                CONF_CS_BASE_URL: self._creds[CONF_CS_BASE_URL],
+                CONF_CS_API_TOKEN: self._creds[CONF_CS_API_TOKEN],
+                CONF_CS_APPLICATION_ID: application_id,
+                CONF_CS_APPLICATION_NAME: application_label,
+            },
+        )
+
+
+# =====================================================================
+# Subentry flow — one thermostat per subentry under a hub
+# =====================================================================
+class ThermostatSubentryFlow(ConfigSubentryFlow):
+    """Add or reconfigure a single WT101 thermostat under a hub entry."""
+
+    def __init__(self) -> None:
+        self._common: dict[str, Any] = {}
+        self._device_options: list[SelectOptionDict] = []
+
+    def _hub_entry(self) -> ConfigEntry:
+        return self._get_entry()
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Step 1: name, sensors, fport, limits."""
+        if user_input is not None:
+            self._common = user_input
+            return await self.async_step_device()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME): str,
+                vol.Required(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Required(CONF_TARGET_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(CONF_FPORT, default=DEFAULT_FPORT): NumberSelector(
                     NumberSelectorConfig(
@@ -141,208 +343,81 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="user", data_schema=schema)
 
-    # ------------------------------------------------------------------ TTN
-    async def async_step_ttn_creds(
+    async def async_step_device(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Collect TTN credentials and try to discover devices."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            self._creds = dict(user_input)
+    ) -> SubentryFlowResult:
+        """Step 2: pick the thermostat from the hub's application."""
+        entry = self._hub_entry()
+        platform = entry.data[CONF_PLATFORM_TYPE]
+
+        # Discover devices once per visit so the dropdown is fresh.
+        if not self._device_options:
             try:
-                devices = await _ttn_list_devices(
-                    self.hass,
-                    user_input[CONF_TTN_BASE_URL],
-                    user_input[CONF_TTN_APPLICATION_ID],
-                    user_input[CONF_TTN_API_KEY],
-                )
+                if platform == PLATFORM_TTN:
+                    devices = await _ttn_list_devices(
+                        self.hass,
+                        entry.data[CONF_TTN_BASE_URL],
+                        entry.data[CONF_TTN_APPLICATION_ID],
+                        entry.data[CONF_TTN_API_KEY],
+                    )
+                    self._device_options = _ttn_build_options(devices)
+                else:
+                    devices = await _cs_list_devices(
+                        self.hass,
+                        entry.data[CONF_CS_BASE_URL],
+                        entry.data[CONF_CS_API_TOKEN],
+                        entry.data[CONF_CS_APPLICATION_ID],
+                    )
+                    self._device_options = _cs_build_options(devices)
             except _ApiError as err:
-                _LOGGER.warning("TTN device listing failed: %s", err)
-                errors["base"] = "cannot_connect"
-            else:
-                self._device_options = _ttn_build_options(devices)
-                return await self.async_step_ttn_device()
+                _LOGGER.warning("Device discovery failed: %s", err)
+                self._device_options = []
 
-        defaults = self._creds
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_TTN_BASE_URL,
-                    default=defaults.get(CONF_TTN_BASE_URL, DEFAULT_TTN_BASE_URL),
-                ): str,
-                vol.Required(
-                    CONF_TTN_APPLICATION_ID,
-                    default=defaults.get(CONF_TTN_APPLICATION_ID, ""),
-                ): str,
-                vol.Required(
-                    CONF_TTN_API_KEY,
-                    default=defaults.get(CONF_TTN_API_KEY, ""),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-            }
-        )
-        return self.async_show_form(
-            step_id="ttn_creds", data_schema=schema, errors=errors
+        device_key = (
+            CONF_TTN_DEVICE_ID if platform == PLATFORM_TTN else CONF_CS_DEV_EUI
         )
 
-    async def async_step_ttn_device(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Pick a discovered TTN device or fall back to manual entry."""
         if user_input is not None:
-            choice = user_input[CONF_TTN_DEVICE_ID]
+            choice = user_input[device_key]
             if choice == _MANUAL_ENTRY:
-                return await self.async_step_ttn_manual()
-            return self._finish_ttn(choice)
+                return await self.async_step_manual()
+            return self._create(device_key, choice)
 
         options = list(self._device_options) + [
             SelectOptionDict(value=_MANUAL_ENTRY, label="Manual entry…")
         ]
         schema = vol.Schema(
             {
-                vol.Required(CONF_TTN_DEVICE_ID): SelectSelector(
+                vol.Required(device_key): SelectSelector(
                     SelectSelectorConfig(
                         options=options, mode=SelectSelectorMode.DROPDOWN
                     )
                 ),
             }
         )
-        return self.async_show_form(step_id="ttn_device", data_schema=schema)
+        return self.async_show_form(step_id="device", data_schema=schema)
 
-    async def async_step_ttn_manual(
+    async def async_step_manual(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Type a TTN device id by hand."""
-        if user_input is not None:
-            return self._finish_ttn(user_input[CONF_TTN_DEVICE_ID].strip())
-        schema = vol.Schema({vol.Required(CONF_TTN_DEVICE_ID): str})
-        return self.async_show_form(step_id="ttn_manual", data_schema=schema)
-
-    def _finish_ttn(self, device_id: str) -> config_entries.ConfigFlowResult:
-        data = {**self._common, **self._creds, CONF_TTN_DEVICE_ID: device_id}
-        return self.async_create_entry(title=self._common[CONF_NAME], data=data)
-
-    # ------------------------------------------------------------ ChirpStack
-    async def async_step_chirpstack_creds(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Collect ChirpStack credentials and try to discover applications."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            self._creds = dict(user_input)
-            try:
-                apps = await _cs_list_applications(
-                    self.hass,
-                    user_input[CONF_CS_BASE_URL],
-                    user_input[CONF_CS_API_TOKEN],
-                )
-            except _ApiError as err:
-                _LOGGER.warning(
-                    "ChirpStack discovery failed (%s) — continuing with manual entry",
-                    err,
-                )
-                self._app_options = []
-            else:
-                self._app_options = [
-                    SelectOptionDict(value=a["id"], label=a["label"]) for a in apps
-                ]
-            return await self.async_step_chirpstack_app()
-
-        defaults = self._creds
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_CS_BASE_URL,
-                    default=defaults.get(CONF_CS_BASE_URL, DEFAULT_CS_BASE_URL),
-                ): str,
-                vol.Required(
-                    CONF_CS_API_TOKEN,
-                    default=defaults.get(CONF_CS_API_TOKEN, ""),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-            }
+    ) -> SubentryFlowResult:
+        """Manual fallback when discovery is unavailable."""
+        platform = self._hub_entry().data[CONF_PLATFORM_TYPE]
+        device_key = (
+            CONF_TTN_DEVICE_ID if platform == PLATFORM_TTN else CONF_CS_DEV_EUI
         )
-        return self.async_show_form(
-            step_id="chirpstack_creds", data_schema=schema, errors=errors
-        )
-
-    async def async_step_chirpstack_app(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Pick a ChirpStack application (or skip to manual EUI entry)."""
-        errors: dict[str, str] = {}
         if user_input is not None:
-            app_id = user_input[CONF_CS_APPLICATION_ID]
-            if app_id == _MANUAL_ENTRY:
-                return await self.async_step_chirpstack_manual()
-            try:
-                devices = await _cs_list_devices(
-                    self.hass,
-                    self._creds[CONF_CS_BASE_URL],
-                    self._creds[CONF_CS_API_TOKEN],
-                    app_id,
-                )
-            except _ApiError as err:
-                _LOGGER.warning("ChirpStack device listing failed: %s", err)
-                errors["base"] = "cannot_connect"
-            else:
-                self._device_options = _cs_build_options(devices)
-                self._creds[CONF_CS_APPLICATION_ID] = app_id
-                return await self.async_step_chirpstack_device()
+            return self._create(device_key, user_input[device_key].strip())
+        schema = vol.Schema({vol.Required(device_key): str})
+        return self.async_show_form(step_id="manual", data_schema=schema)
 
-        options = list(self._app_options) + [
-            SelectOptionDict(value=_MANUAL_ENTRY, label="Manual entry…")
-        ]
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_CS_APPLICATION_ID): SelectSelector(
-                    SelectSelectorConfig(
-                        options=options, mode=SelectSelectorMode.DROPDOWN
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(
-            step_id="chirpstack_app", data_schema=schema, errors=errors
-        )
-
-    async def async_step_chirpstack_device(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Pick a discovered ChirpStack device or fall back to manual entry."""
-        if user_input is not None:
-            choice = user_input[CONF_CS_DEV_EUI]
-            if choice == _MANUAL_ENTRY:
-                return await self.async_step_chirpstack_manual()
-            return self._finish_chirpstack(choice)
-
-        options = list(self._device_options) + [
-            SelectOptionDict(value=_MANUAL_ENTRY, label="Manual entry…")
-        ]
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_CS_DEV_EUI): SelectSelector(
-                    SelectSelectorConfig(
-                        options=options, mode=SelectSelectorMode.DROPDOWN
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(step_id="chirpstack_device", data_schema=schema)
-
-    async def async_step_chirpstack_manual(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Type a ChirpStack devEui by hand."""
-        if user_input is not None:
-            return self._finish_chirpstack(user_input[CONF_CS_DEV_EUI].strip())
-        schema = vol.Schema({vol.Required(CONF_CS_DEV_EUI): str})
-        return self.async_show_form(step_id="chirpstack_manual", data_schema=schema)
-
-    def _finish_chirpstack(self, dev_eui: str) -> config_entries.ConfigFlowResult:
-        data = {**self._common, **self._creds, CONF_CS_DEV_EUI: dev_eui}
+    def _create(self, device_key: str, device_value: str) -> SubentryFlowResult:
+        data = {**self._common, device_key: device_value}
         return self.async_create_entry(title=self._common[CONF_NAME], data=data)
 
 
-# ============================================================== TTN helpers
+# =====================================================================
+# TTN helpers
+# =====================================================================
 async def _ttn_list_devices(
     hass, base_url: str, application_id: str, api_key: str
 ) -> list[dict[str, Any]]:
@@ -364,7 +439,7 @@ async def _ttn_list_devices(
             payload = await resp.json()
     except (asyncio.TimeoutError, aiohttp.ClientError) as err:
         raise _ApiError(str(err)) from err
-    return payload.get("end_devices", [])
+    return payload.get("end_devices", []) or []
 
 
 def _ttn_build_options(devices: list[dict[str, Any]]) -> list[SelectOptionDict]:
@@ -398,7 +473,9 @@ def _ttn_build_options(devices: list[dict[str, Any]]) -> list[SelectOptionDict]:
     return wt101 + others
 
 
-# ====================================================== ChirpStack helpers
+# =====================================================================
+# ChirpStack helpers
+# =====================================================================
 async def _cs_list_applications(
     hass, base_url: str, token: str
 ) -> list[dict[str, str]]:
@@ -442,12 +519,15 @@ async def _cs_list_applications(
             for a in payload.get("result", []) or []:
                 if a.get("id"):
                     apps.append(
-                        {"id": a["id"], "label": f"{tenant_name} / {a.get('name', a['id'])}"}
+                        {
+                            "id": a["id"],
+                            "label": f"{tenant_name} / {a.get('name', a['id'])}",
+                        }
                     )
     if apps:
         return apps
 
-    # Fallback: try to list applications without tenant filter (older deploys)
+    # Fallback: list applications without tenant filter (older deploys).
     try:
         async with session.get(
             f"{base}/api/applications",

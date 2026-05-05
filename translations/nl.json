@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LoRaWAN-application toevoegen",
+        "description": "Kies het LoRaWAN-platform met je WT101-thermostaten. Daarna voeg je per knop een subentry toe zonder de gegevens opnieuw in te voeren.",
+        "data": {
+          "platform_type": "LoRaWAN-platform"
+        }
+      },
+      "ttn": {
+        "title": "TTN application",
+        "description": "Server-URL, application ID en API-key van The Things Stack v3. De gegevens worden gevalideerd door de devices in deze application op te halen.",
+        "data": {
+          "ttn_base_url": "Server-URL",
+          "ttn_application_id": "Application ID",
+          "ttn_api_key": "API-key"
+        }
+      },
+      "chirpstack": {
+        "title": "ChirpStack-gegevens",
+        "description": "Server-URL en API-token van ChirpStack v4.",
+        "data": {
+          "cs_base_url": "Server-URL",
+          "cs_api_token": "API-token"
+        }
+      },
+      "chirpstack_app": {
+        "title": "Kies een ChirpStack-application",
+        "description": "Kies de application met je WT101-thermostaten of selecteer Handmatige invoer om de application-ID direct te typen.",
+        "data": {
+          "cs_application_id": "Application"
+        }
+      },
+      "chirpstack_app_manual": {
+        "title": "ChirpStack application-ID",
+        "description": "Typ de application-ID (UUID).",
+        "data": {
+          "cs_application_id": "Application-ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan de server niet bereiken. Controleer URL, gegevens en netwerk."
+    },
+    "abort": {
+      "already_configured": "Deze LoRaWAN-application is al geconfigureerd."
+    }
+  },
+  "config_subentries": {
+    "thermostat": {
+      "initiate_flow": {
+        "user": "Thermostaat toevoegen"
+      },
+      "entry_type": "Thermostaat",
+      "step": {
+        "user": {
+          "title": "WT101-thermostaat toevoegen",
+          "description": "Kies de sensors met de uplink-data voor deze thermostaat en stel de grenzen in. De gegevens van de application worden hergebruikt.",
+          "data": {
+            "name": "Naam",
+            "current_temp_sensor": "Sensor huidige temperatuur",
+            "target_temp_sensor": "Sensor doeltemperatuur",
+            "fport": "Application fPort",
+            "min_temp": "Minimale doeltemperatuur (°C)",
+            "max_temp": "Maximale doeltemperatuur (°C)",
+            "tolerance": "Tolerantie doeltemperatuur (°C)"
+          }
+        },
+        "device": {
+          "title": "Kies de thermostaat",
+          "description": "WT101-devices staan bovenaan (TTN: match op Milesight + WT101 in version_ids; ChirpStack: \"WT101\" in de device profile-naam). Kies een device of selecteer Handmatige invoer.",
+          "data": {
+            "ttn_device_id": "Device",
+            "cs_dev_eui": "Device"
+          }
+        },
+        "manual": {
+          "title": "Handmatig device opgeven",
+          "description": "Typ de TTN device-ID of ChirpStack device-EUI.",
+          "data": {
+            "ttn_device_id": "Device ID",
+            "cs_dev_eui": "Device EUI"
+          }
+        }
+      }
+    }
+  }
+}

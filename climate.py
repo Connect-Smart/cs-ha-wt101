@@ -1,4 +1,9 @@
-"""Climate entity for the Milesight WT101 LoRaWAN thermostat."""
+"""Climate entity for the Milesight WT101 LoRaWAN thermostat.
+
+One config entry == one LoRaWAN application (hub). Each thermostat lives as a
+ConfigSubentry under that hub, so all thermostats in the same TTN/ChirpStack
+application share one set of credentials.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -14,7 +19,7 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACMode,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     CONF_NAME,
@@ -50,6 +55,7 @@ from .const import (
     DOMAIN,
     PLATFORM_CHIRPSTACK,
     PLATFORM_TTN,
+    SUBENTRY_TYPE_THERMOSTAT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,8 +70,23 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the climate entity for this config entry."""
-    async_add_entities([Wt101ClimateEntity(hass, entry)])
+    """Create one climate entity per thermostat subentry of this hub."""
+    seen_subentries: set[str] = set()
+
+    @callback
+    def _add_subentry(subentry: ConfigSubentry) -> None:
+        if subentry.subentry_type != SUBENTRY_TYPE_THERMOSTAT:
+            return
+        if subentry.subentry_id in seen_subentries:
+            return
+        seen_subentries.add(subentry.subentry_id)
+        async_add_entities(
+            [Wt101ClimateEntity(hass, entry, subentry)],
+            config_subentry_id=subentry.subentry_id,
+        )
+
+    for subentry in entry.subentries.values():
+        _add_subentry(subentry)
 
 
 def build_target_temperature_payload(
@@ -82,7 +103,7 @@ def build_target_temperature_payload(
 
 
 class Wt101ClimateEntity(ClimateEntity):
-    """One climate entity bound to one WT101 thermostat."""
+    """One climate entity bound to one WT101 thermostat (one subentry)."""
 
     _attr_hvac_modes = [HVACMode.HEAT]
     _attr_hvac_mode = HVACMode.HEAT
@@ -92,41 +113,48 @@ class Wt101ClimateEntity(ClimateEntity):
     _attr_should_poll = False
     _attr_has_entity_name = False
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        subentry: ConfigSubentry,
+    ) -> None:
         self.hass = hass
         self._entry = entry
-        data = entry.data
+        self._subentry = subentry
 
-        self._attr_name = data[CONF_NAME]
-        self._attr_unique_id = entry.entry_id
+        sub_data = subentry.data
+        self._attr_name = sub_data[CONF_NAME]
+        self._attr_unique_id = subentry.subentry_id
 
-        self._current_sensor: str = data[CONF_CURRENT_TEMP_SENSOR]
-        self._target_sensor: str = data[CONF_TARGET_TEMP_SENSOR]
+        self._current_sensor: str = sub_data[CONF_CURRENT_TEMP_SENSOR]
+        self._target_sensor: str = sub_data[CONF_TARGET_TEMP_SENSOR]
 
-        self._attr_min_temp = float(data.get(CONF_MIN_TEMP, DEFAULT_MIN_TEMP))
-        self._attr_max_temp = float(data.get(CONF_MAX_TEMP, DEFAULT_MAX_TEMP))
-        self._tolerance = float(data.get(CONF_TOLERANCE, DEFAULT_TOLERANCE))
-        self._fport = int(data.get(CONF_FPORT, DEFAULT_FPORT))
-        self._platform: str = data[CONF_PLATFORM_TYPE]
+        self._attr_min_temp = float(sub_data.get(CONF_MIN_TEMP, DEFAULT_MIN_TEMP))
+        self._attr_max_temp = float(sub_data.get(CONF_MAX_TEMP, DEFAULT_MAX_TEMP))
+        self._tolerance = float(sub_data.get(CONF_TOLERANCE, DEFAULT_TOLERANCE))
+        self._fport = int(sub_data.get(CONF_FPORT, DEFAULT_FPORT))
 
         self._attr_current_temperature: float | None = None
         self._attr_target_temperature: float | None = None
 
-        # Identifier for the device-registry entry: TTN device id or ChirpStack devEUI.
         identifier = (
-            data.get(CONF_TTN_DEVICE_ID)
-            or data.get(CONF_CS_DEV_EUI)
-            or entry.entry_id
+            sub_data.get(CONF_TTN_DEVICE_ID)
+            or sub_data.get(CONF_CS_DEV_EUI)
+            or subentry.subentry_id
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
-            name=data[CONF_NAME],
+            name=sub_data[CONF_NAME],
             manufacturer="Milesight",
             model="WT101",
         )
 
+    @property
+    def _platform(self) -> str:
+        return self._entry.data[CONF_PLATFORM_TYPE]
+
     async def async_added_to_hass(self) -> None:
-        """Sync state from the source sensors and start tracking changes."""
         await super().async_added_to_hass()
         self._sync_from_state(
             self._current_sensor, self.hass.states.get(self._current_sensor)
@@ -150,7 +178,6 @@ class Wt101ClimateEntity(ClimateEntity):
             self.async_write_ha_state()
 
     def _sync_from_state(self, entity_id: str | None, state) -> bool:
-        """Update internal state from a source sensor; return True if changed."""
         if entity_id is None or state is None:
             return False
         if state.state in (None, "", STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -186,7 +213,6 @@ class Wt101ClimateEntity(ClimateEntity):
             return None
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Send a target-temperature downlink unless the value already matches uplink."""
         new_temp = kwargs.get(ATTR_TEMPERATURE)
         if new_temp is None:
             return
@@ -196,8 +222,6 @@ class Wt101ClimateEntity(ClimateEntity):
 
         sensor_value = self._sensor_target_value()
         if sensor_value is not None and abs(sensor_value - new_temp) < 0.05:
-            # Value already matches what the device reports — this call originated
-            # from a sensor sync, not from the user. Do not fire a downlink.
             _LOGGER.debug(
                 "%s: skip downlink, requested %.1f matches sensor %.1f",
                 self.entity_id,
@@ -231,11 +255,12 @@ class Wt101ClimateEntity(ClimateEntity):
         return False
 
     async def _send_ttn(self, frm_payload_b64: str) -> bool:
-        data = self._entry.data
-        base_url = str(data[CONF_TTN_BASE_URL]).rstrip("/")
-        app_id = data[CONF_TTN_APPLICATION_ID]
-        device_id = data[CONF_TTN_DEVICE_ID]
-        api_key = data[CONF_TTN_API_KEY]
+        hub = self._entry.data
+        sub = self._subentry.data
+        base_url = str(hub[CONF_TTN_BASE_URL]).rstrip("/")
+        app_id = hub[CONF_TTN_APPLICATION_ID]
+        device_id = sub[CONF_TTN_DEVICE_ID]
+        api_key = hub[CONF_TTN_API_KEY]
 
         url = (
             f"{base_url}/api/v3/as/applications/{app_id}"
@@ -258,10 +283,11 @@ class Wt101ClimateEntity(ClimateEntity):
         return await self._post(url, body, headers, "TTN")
 
     async def _send_chirpstack(self, data_b64: str) -> bool:
-        data = self._entry.data
-        base_url = str(data[CONF_CS_BASE_URL]).rstrip("/")
-        dev_eui = data[CONF_CS_DEV_EUI]
-        token = data[CONF_CS_API_TOKEN]
+        hub = self._entry.data
+        sub = self._subentry.data
+        base_url = str(hub[CONF_CS_BASE_URL]).rstrip("/")
+        dev_eui = sub[CONF_CS_DEV_EUI]
+        token = hub[CONF_CS_API_TOKEN]
 
         url = f"{base_url}/api/devices/{dev_eui}/queue"
         body = {

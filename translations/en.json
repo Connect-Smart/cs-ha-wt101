@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a LoRaWAN application",
+        "description": "Pick the LoRaWAN platform that hosts your WT101 thermostats. After adding the application you can add multiple thermostats under it without re-entering credentials.",
+        "data": {
+          "platform_type": "LoRaWAN platform"
+        }
+      },
+      "ttn": {
+        "title": "TTN application",
+        "description": "The Things Stack v3 server URL, application ID, and API key. The credentials are validated by listing devices in this application.",
+        "data": {
+          "ttn_base_url": "Server URL",
+          "ttn_application_id": "Application ID",
+          "ttn_api_key": "API key"
+        }
+      },
+      "chirpstack": {
+        "title": "ChirpStack credentials",
+        "description": "ChirpStack v4 server URL and API token.",
+        "data": {
+          "cs_base_url": "Server URL",
+          "cs_api_token": "API token"
+        }
+      },
+      "chirpstack_app": {
+        "title": "Pick a ChirpStack application",
+        "description": "Choose the application that contains your WT101 thermostats, or pick Manual entry to type the application ID directly.",
+        "data": {
+          "cs_application_id": "Application"
+        }
+      },
+      "chirpstack_app_manual": {
+        "title": "ChirpStack application ID",
+        "description": "Type the application ID (UUID).",
+        "data": {
+          "cs_application_id": "Application ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the server. Check the URL, credentials, and network."
+    },
+    "abort": {
+      "already_configured": "This LoRaWAN application is already configured."
+    }
+  },
+  "config_subentries": {
+    "thermostat": {
+      "initiate_flow": {
+        "user": "Add thermostat"
+      },
+      "entry_type": "Thermostat",
+      "step": {
+        "user": {
+          "title": "Add a WT101 thermostat",
+          "description": "Pick the sensors that hold the uplink data for this thermostat and set the limits. Credentials are inherited from the parent application.",
+          "data": {
+            "name": "Name",
+            "current_temp_sensor": "Current temperature sensor",
+            "target_temp_sensor": "Target temperature sensor",
+            "fport": "Application fPort",
+            "min_temp": "Minimum target temperature (°C)",
+            "max_temp": "Maximum target temperature (°C)",
+            "tolerance": "Target temperature tolerance (°C)"
+          }
+        },
+        "device": {
+          "title": "Pick the thermostat device",
+          "description": "WT101 devices are listed first (matched on Milesight brand and WT101 model in TTN, or \"WT101\" in the ChirpStack device profile name). Pick a device or choose Manual entry.",
+          "data": {
+            "ttn_device_id": "Device",
+            "cs_dev_eui": "Device"
+          }
+        },
+        "manual": {
+          "title": "Manual device id",
+          "description": "Type the TTN device ID or ChirpStack device EUI.",
+          "data": {
+            "ttn_device_id": "Device ID",
+            "cs_dev_eui": "Device EUI"
+          }
+        }
+      }
+    }
+  }
+}
