@@ -1,0 +1,13 @@
+{
+  "domain": "wt101_climate",
+  "name": "Milesight WT101 Climate",
+  "version": "0.1.0",
+  "config_flow": true,
+  "iot_class": "local_push",
+  "integration_type": "device",
+  "documentation": "https://github.com/Milesight-IoT/SensorDecoders",
+  "issue_tracker": "https://github.com/Milesight-IoT/SensorDecoders/issues",
+  "codeowners": [],
+  "dependencies": [],
+  "requirements": []
+}
