@@ -38,6 +38,10 @@
         "data": {
           "cs_application_id": "Application ID"
         }
+      },
+      "chirpstack_webhook": {
+        "title": "ChirpStack HTTP integration",
+        "description": "Add an **HTTP integration** to this ChirpStack application and paste the URL below as the *Endpoint URL* (uplink event). Use *JSON* as the payload encoding.\n\n**Webhook URL:**\n```\n{webhook_url}\n```\n\nMake sure the Milesight WT101 codec is loaded on the device profile so `temperature` and `target_temperature` are decoded into the `object` field.\n\nClick **Submit** to finish."
       }
     },
     "error": {
@@ -45,6 +49,34 @@
     },
     "abort": {
       "already_configured": "This LoRaWAN application is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ChirpStack HTTP integration",
+        "description": "Paste this URL into the ChirpStack application's HTTP integration as the *Endpoint URL* (uplink event), JSON encoded.\n\n**Webhook URL:**\n```\n{webhook_url}\n```"
+      }
+    },
+    "abort": {
+      "no_webhook": "This hub has no webhook configured (TTN hubs do not use a webhook)."
+    }
+  },
+  "entity": {
+    "button": {
+      "calibrate_valve": {
+        "name": "Calibrate valve"
+      }
+    },
+    "number": {
+      "temperature_offset": {
+        "name": "Temperature offset"
+      }
+    },
+    "switch": {
+      "temperature_control": {
+        "name": "Temperature control"
+      }
     }
   },
   "config_subentries": {
@@ -56,11 +88,11 @@
       "step": {
         "user": {
           "title": "Add a WT101 thermostat",
-          "description": "Pick the sensors that hold the uplink data for this thermostat and set the limits. Credentials are inherited from the parent application.",
+          "description": "Set the name and limits. Credentials are inherited from the parent application.\n\nThe sensor pickers are **optional** — leave them empty for ChirpStack hubs that use the HTTP integration (the climate entity is updated directly by the webhook). For TTN, or if you already have sensors from another integration, pick them here.",
           "data": {
             "name": "Name",
-            "current_temp_sensor": "Current temperature sensor",
-            "target_temp_sensor": "Target temperature sensor",
+            "current_temp_sensor": "Current temperature sensor (optional)",
+            "target_temp_sensor": "Target temperature sensor (optional)",
             "fport": "Application fPort",
             "min_temp": "Minimum target temperature (°C)",
             "max_temp": "Maximum target temperature (°C)",

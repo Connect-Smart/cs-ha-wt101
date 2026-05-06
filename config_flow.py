@@ -14,10 +14,12 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.components import webhook
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlowResult,
     ConfigSubentryFlow,
+    OptionsFlow,
     SubentryFlowResult,
 )
 from homeassistant.const import CONF_NAME
@@ -44,6 +46,7 @@ from .const import (
     CONF_CS_APPLICATION_NAME,
     CONF_CS_BASE_URL,
     CONF_CS_DEV_EUI,
+    CONF_CS_WEBHOOK_ID,
     CONF_CURRENT_TEMP_SENSOR,
     CONF_FPORT,
     CONF_MAX_TEMP,
@@ -90,6 +93,13 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._platform: str | None = None
         self._creds: dict[str, Any] = {}
         self._app_options: list[SelectOptionDict] = []
+        self._pending_cs_entry: dict[str, Any] | None = None
+        self._pending_cs_title: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(entry: ConfigEntry) -> OptionsFlow:
+        return Wt101OptionsFlow()
 
     @classmethod
     @callback
@@ -271,15 +281,68 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         await self.async_set_unique_id(unique)
         self._abort_if_unique_id_configured()
-        return self.async_create_entry(
-            title=f"ChirpStack: {application_label}",
-            data={
-                CONF_PLATFORM_TYPE: PLATFORM_CHIRPSTACK,
-                CONF_CS_BASE_URL: self._creds[CONF_CS_BASE_URL],
-                CONF_CS_API_TOKEN: self._creds[CONF_CS_API_TOKEN],
-                CONF_CS_APPLICATION_ID: application_id,
-                CONF_CS_APPLICATION_NAME: application_label,
-            },
+
+        # Stash the entry payload and show the webhook URL before creating it,
+        # so the user can paste it into ChirpStack's HTTP integration.
+        self._pending_cs_entry = {
+            CONF_PLATFORM_TYPE: PLATFORM_CHIRPSTACK,
+            CONF_CS_BASE_URL: self._creds[CONF_CS_BASE_URL],
+            CONF_CS_API_TOKEN: self._creds[CONF_CS_API_TOKEN],
+            CONF_CS_APPLICATION_ID: application_id,
+            CONF_CS_APPLICATION_NAME: application_label,
+            CONF_CS_WEBHOOK_ID: webhook.async_generate_id(),
+        }
+        self._pending_cs_title = f"ChirpStack: {application_label}"
+        return await self.async_step_chirpstack_webhook()
+
+    async def async_step_chirpstack_webhook(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the webhook URL to paste into ChirpStack's HTTP integration."""
+        assert self._pending_cs_entry is not None
+        assert self._pending_cs_title is not None
+        webhook_id = self._pending_cs_entry[CONF_CS_WEBHOOK_ID]
+
+        if user_input is not None:
+            data = self._pending_cs_entry
+            title = self._pending_cs_title
+            self._pending_cs_entry = None
+            self._pending_cs_title = None
+            return self.async_create_entry(title=title, data=data)
+
+        url = webhook.async_generate_url(self.hass, webhook_id)
+        return self.async_show_form(
+            step_id="chirpstack_webhook",
+            data_schema=vol.Schema({}),
+            description_placeholders={"webhook_url": url},
+        )
+
+
+# =====================================================================
+# Options flow — re-display the ChirpStack webhook URL after setup
+# =====================================================================
+class Wt101OptionsFlow(OptionsFlow):
+    """Display the ChirpStack webhook URL so users can copy it again later."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        entry = self.config_entry
+        if entry.data.get(CONF_PLATFORM_TYPE) != PLATFORM_CHIRPSTACK:
+            return self.async_create_entry(title="", data={})
+
+        webhook_id = entry.data.get(CONF_CS_WEBHOOK_ID)
+        if not webhook_id:
+            return self.async_abort(reason="no_webhook")
+
+        if user_input is not None:
+            return self.async_create_entry(title="", data={})
+
+        url = webhook.async_generate_url(self.hass, webhook_id)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({}),
+            description_placeholders={"webhook_url": url},
         )
 
 
@@ -307,10 +370,10 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME): str,
-                vol.Required(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
+                vol.Optional(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
                     EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(CONF_TARGET_TEMP_SENSOR): EntitySelector(
+                vol.Optional(CONF_TARGET_TEMP_SENSOR): EntitySelector(
                     EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(CONF_FPORT, default=DEFAULT_FPORT): NumberSelector(

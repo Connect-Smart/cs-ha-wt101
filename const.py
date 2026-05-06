@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "wt101_climate"
-PLATFORMS: list[str] = ["climate"]
+PLATFORMS: list[str] = ["climate", "button", "number", "switch"]
 
 # Subentry type — one thermostat per subentry under a hub config entry.
 SUBENTRY_TYPE_THERMOSTAT = "thermostat"
@@ -18,6 +18,12 @@ CONF_CS_BASE_URL = "cs_base_url"
 CONF_CS_API_TOKEN = "cs_api_token"
 CONF_CS_APPLICATION_ID = "cs_application_id"
 CONF_CS_APPLICATION_NAME = "cs_application_name"
+CONF_CS_WEBHOOK_ID = "cs_webhook_id"
+
+
+def cs_uplink_signal(entry_id: str, dev_eui: str) -> str:
+    """Dispatcher signal for a single ChirpStack device's uplink updates."""
+    return f"{DOMAIN}_cs_uplink_{entry_id}_{dev_eui.lower()}"
 
 # Subentry-level (per thermostat) keys.
 CONF_CURRENT_TEMP_SENSOR = "current_temp_sensor"
