@@ -19,6 +19,7 @@ CONF_CS_API_TOKEN = "cs_api_token"
 CONF_CS_APPLICATION_ID = "cs_application_id"
 CONF_CS_APPLICATION_NAME = "cs_application_name"
 CONF_CS_WEBHOOK_ID = "cs_webhook_id"
+CONF_CS_WEBHOOK_URL_OVERRIDE = "cs_webhook_url_override"
 
 
 def cs_uplink_signal(entry_id: str, dev_eui: str) -> str:

@@ -40,8 +40,17 @@
         }
       },
       "chirpstack_webhook": {
-        "title": "ChirpStack HTTP integration",
-        "description": "Add an **HTTP integration** to this ChirpStack application and paste the URL below as the *Endpoint URL* (uplink event). Use *JSON* as the payload encoding.\n\n**Webhook URL:**\n```\n{webhook_url}\n```\n\nMake sure the Milesight WT101 codec is loaded on the device profile so `temperature` and `target_temperature` are decoded into the `object` field.\n\nClick **Submit** to finish."
+        "title": "ChirpStack HTTP integration — URL",
+        "description": "{status}\n\nReview the URL ChirpStack should POST uplinks to. The default is HA's auto-detected URL; replace it if you use a reverse proxy, custom domain, or external port.\n\nMake sure the Milesight WT101 codec is loaded on the device profile so `temperature`, `target_temperature`, `motor_position` and `motor_stroke` are decoded into the `object` field.",
+        "data": {
+          "webhook_url": "Webhook URL (leave default to use HA's external URL)",
+          "overwrite": "Overwrite existing HTTP integration on ChirpStack",
+          "skip_auto_config": "Skip auto-configure (I'll set up the HTTP integration manually)"
+        }
+      },
+      "chirpstack_webhook_apply": {
+        "title": "ChirpStack HTTP integration — result",
+        "description": "{status}\n\nClick **Submit** to finish setup."
       }
     },
     "error": {
@@ -54,8 +63,17 @@
   "options": {
     "step": {
       "init": {
-        "title": "ChirpStack HTTP integration",
-        "description": "Paste this URL into the ChirpStack application's HTTP integration as the *Endpoint URL* (uplink event), JSON encoded.\n\n**Webhook URL:**\n```\n{webhook_url}\n```"
+        "title": "ChirpStack HTTP integration — URL",
+        "description": "{status}\n\nReview or change the URL ChirpStack uses. Leaving the default applies HA's auto-detected URL.",
+        "data": {
+          "webhook_url": "Webhook URL",
+          "overwrite": "Overwrite existing HTTP integration on ChirpStack",
+          "skip_auto_config": "Skip auto-configure"
+        }
+      },
+      "apply": {
+        "title": "ChirpStack HTTP integration — result",
+        "description": "{status}\n\nClick **Submit** to close."
       }
     },
     "abort": {

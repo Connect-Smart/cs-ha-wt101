@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -47,6 +48,7 @@ from .const import (
     CONF_CS_BASE_URL,
     CONF_CS_DEV_EUI,
     CONF_CS_WEBHOOK_ID,
+    CONF_CS_WEBHOOK_URL_OVERRIDE,
     CONF_CURRENT_TEMP_SENSOR,
     CONF_FPORT,
     CONF_MAX_TEMP,
@@ -97,6 +99,11 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._app_options: list[SelectOptionDict] = []
         self._pending_cs_entry: dict[str, Any] | None = None
         self._pending_cs_title: str | None = None
+        self._pending_cs_url: str = ""
+        self._pending_cs_skip: bool = False
+        self._pending_cs_overwrite: bool = False
+        self._pending_cs_existing_url: str | None = None
+        self._pending_cs_reachable: bool = False
 
     @staticmethod
     @callback
@@ -300,23 +307,126 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_chirpstack_webhook(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the webhook URL to paste into ChirpStack's HTTP integration."""
+        """Step 1: confirm/override the webhook URL ChirpStack should POST to."""
         assert self._pending_cs_entry is not None
-        assert self._pending_cs_title is not None
         webhook_id = self._pending_cs_entry[CONF_CS_WEBHOOK_ID]
+        auto_url = webhook.async_generate_url(self.hass, webhook_id)
+
+        # Probe ChirpStack so the user can see what is currently configured.
+        reachable, existing_url, probe_err = await _cs_get_http_integration_url(
+            self.hass,
+            self._pending_cs_entry[CONF_CS_BASE_URL],
+            self._pending_cs_entry[CONF_CS_API_TOKEN],
+            self._pending_cs_entry[CONF_CS_APPLICATION_ID],
+        )
 
         if user_input is not None:
-            data = self._pending_cs_entry
+            chosen_url = (user_input.get("webhook_url") or auto_url).strip()
+            self._pending_cs_url = chosen_url
+            self._pending_cs_skip = bool(user_input.get("skip_auto_config"))
+            self._pending_cs_overwrite = bool(user_input.get("overwrite"))
+            self._pending_cs_existing_url = existing_url
+            self._pending_cs_reachable = reachable
+            return await self.async_step_chirpstack_webhook_apply()
+
+        notes: list[str] = []
+        if not reachable:
+            notes.append(
+                f"⚠️ Could not reach ChirpStack to read its current state ({probe_err}). "
+                "Auto-configure may fail; fix the URL/token in step 1 if so."
+            )
+        elif existing_url is None:
+            notes.append("ℹ️ No HTTP integration is configured on ChirpStack yet.")
+        elif existing_url == auto_url:
+            notes.append(
+                f"✅ ChirpStack already has this exact URL configured: `{existing_url}`."
+            )
+        else:
+            notes.append(
+                f"⚠️ ChirpStack already has a different HTTP endpoint: `{existing_url}`. "
+                "Tick **Overwrite existing** to replace it, or tick **Skip auto-configure** "
+                "to leave ChirpStack alone."
+            )
+        if _looks_internal(auto_url):
+            notes.append(
+                f"⚠️ The auto-detected URL looks internal: `{auto_url}`. "
+                "ChirpStack must be able to reach this URL — set HA's *external URL* "
+                "(Settings → System → Network) or type a publicly reachable URL below."
+            )
+        status = "\n\n".join(notes) if notes else ""
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    "webhook_url",
+                    description={"suggested_value": auto_url},
+                ): str,
+                vol.Optional("overwrite", default=False): bool,
+                vol.Optional("skip_auto_config", default=False): bool,
+            }
+        )
+        return self.async_show_form(
+            step_id="chirpstack_webhook",
+            data_schema=schema,
+            description_placeholders={"status": status},
+        )
+
+    async def async_step_chirpstack_webhook_apply(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Step 2: apply the integration via ChirpStack API and finalize."""
+        assert self._pending_cs_entry is not None
+        assert self._pending_cs_title is not None
+        url = self._pending_cs_url
+        skip = self._pending_cs_skip
+        overwrite = self._pending_cs_overwrite
+        existing_url = self._pending_cs_existing_url
+        reachable = self._pending_cs_reachable
+
+        if user_input is not None:
+            data = dict(self._pending_cs_entry)
+            auto_url = webhook.async_generate_url(self.hass, data[CONF_CS_WEBHOOK_ID])
+            if url and url != auto_url:
+                data[CONF_CS_WEBHOOK_URL_OVERRIDE] = url
             title = self._pending_cs_title
             self._pending_cs_entry = None
             self._pending_cs_title = None
             return self.async_create_entry(title=title, data=data)
 
-        url = webhook.async_generate_url(self.hass, webhook_id)
+        # Decide whether to call the API and what to report.
+        if skip:
+            status = (
+                f"⏭️ Auto-configure skipped. Add an HTTP integration manually with: `{url}`"
+            )
+        elif not reachable:
+            status = (
+                f"⚠️ ChirpStack was unreachable; nothing was applied. URL to use: `{url}`"
+            )
+        elif existing_url and existing_url != url and not overwrite:
+            status = (
+                f"⏭️ Existing HTTP endpoint left intact (`{existing_url}`). "
+                f"Re-open this step and tick **Overwrite existing** to replace it with `{url}`."
+            )
+        else:
+            ok, detail = await _cs_set_http_integration(
+                self.hass,
+                self._pending_cs_entry[CONF_CS_BASE_URL],
+                self._pending_cs_entry[CONF_CS_API_TOKEN],
+                self._pending_cs_entry[CONF_CS_APPLICATION_ID],
+                url,
+                exists=bool(existing_url),
+            )
+            status = (
+                f"✅ HTTP integration {detail} on ChirpStack with URL `{url}`."
+                if ok
+                else f"⚠️ Could not auto-configure ChirpStack ({detail}). "
+                f"Add the URL manually: `{url}`"
+            )
+
         return self.async_show_form(
-            step_id="chirpstack_webhook",
+            step_id="chirpstack_webhook_apply",
             data_schema=vol.Schema({}),
-            description_placeholders={"webhook_url": url},
+            description_placeholders={"status": status, "webhook_url": url},
         )
 
 
@@ -324,7 +434,22 @@ class Wt101ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 # Options flow — re-display the ChirpStack webhook URL after setup
 # =====================================================================
 class Wt101OptionsFlow(OptionsFlow):
-    """Display the ChirpStack webhook URL so users can copy it again later."""
+    """Reconfigure the ChirpStack HTTP integration after initial setup."""
+
+    def __init__(self) -> None:
+        self._pending_url: str = ""
+        self._pending_skip: bool = False
+        self._pending_overwrite: bool = False
+        self._pending_existing_url: str | None = None
+        self._pending_reachable: bool = False
+
+    def _resolve_url(self, entry_data) -> str:
+        override = entry_data.get(CONF_CS_WEBHOOK_URL_OVERRIDE)
+        if override:
+            return override
+        return webhook.async_generate_url(
+            self.hass, entry_data[CONF_CS_WEBHOOK_ID]
+        )
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -337,14 +462,117 @@ class Wt101OptionsFlow(OptionsFlow):
         if not webhook_id:
             return self.async_abort(reason="no_webhook")
 
-        if user_input is not None:
-            return self.async_create_entry(title="", data={})
+        current_url = self._resolve_url(entry.data)
+        reachable, existing_url, probe_err = await _cs_get_http_integration_url(
+            self.hass,
+            entry.data[CONF_CS_BASE_URL],
+            entry.data[CONF_CS_API_TOKEN],
+            entry.data[CONF_CS_APPLICATION_ID],
+        )
 
-        url = webhook.async_generate_url(self.hass, webhook_id)
+        if user_input is not None:
+            self._pending_url = (user_input.get("webhook_url") or current_url).strip()
+            self._pending_skip = bool(user_input.get("skip_auto_config"))
+            self._pending_overwrite = bool(user_input.get("overwrite"))
+            self._pending_existing_url = existing_url
+            self._pending_reachable = reachable
+            return await self.async_step_apply()
+
+        notes: list[str] = []
+        if not reachable:
+            notes.append(
+                f"⚠️ Could not reach ChirpStack ({probe_err}). Re-apply may fail."
+            )
+        elif existing_url is None:
+            notes.append("ℹ️ No HTTP integration is configured on ChirpStack.")
+        elif existing_url == current_url:
+            notes.append(
+                f"✅ ChirpStack already has this exact URL: `{existing_url}`."
+            )
+        else:
+            notes.append(
+                f"⚠️ ChirpStack has a different HTTP endpoint: `{existing_url}`. "
+                "Tick **Overwrite existing** to replace it, or tick **Skip auto-configure**."
+            )
+        if _looks_internal(current_url):
+            notes.append(
+                f"⚠️ The current URL looks internal: `{current_url}`. "
+                "ChirpStack must be able to reach it."
+            )
+        status = "\n\n".join(notes) if notes else ""
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    "webhook_url",
+                    description={"suggested_value": current_url},
+                ): str,
+                vol.Optional("overwrite", default=False): bool,
+                vol.Optional("skip_auto_config", default=False): bool,
+            }
+        )
         return self.async_show_form(
             step_id="init",
+            data_schema=schema,
+            description_placeholders={"status": status},
+        )
+
+    async def async_step_apply(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Apply the chosen URL to ChirpStack and persist any URL override."""
+        entry = self.config_entry
+        url = self._pending_url
+
+        if user_input is not None:
+            auto_url = webhook.async_generate_url(
+                self.hass, entry.data[CONF_CS_WEBHOOK_ID]
+            )
+            new_data = dict(entry.data)
+            if url and url != auto_url:
+                new_data[CONF_CS_WEBHOOK_URL_OVERRIDE] = url
+            else:
+                new_data.pop(CONF_CS_WEBHOOK_URL_OVERRIDE, None)
+            self.hass.config_entries.async_update_entry(entry, data=new_data)
+            return self.async_create_entry(title="", data={})
+
+        if self._pending_skip:
+            status = (
+                f"⏭️ Auto-configure skipped. Add an HTTP integration manually with: `{url}`"
+            )
+        elif not self._pending_reachable:
+            status = (
+                f"⚠️ ChirpStack was unreachable; nothing was applied. URL: `{url}`"
+            )
+        elif (
+            self._pending_existing_url
+            and self._pending_existing_url != url
+            and not self._pending_overwrite
+        ):
+            status = (
+                f"⏭️ Existing HTTP endpoint left intact (`{self._pending_existing_url}`). "
+                f"Re-open and tick **Overwrite existing** to replace it with `{url}`."
+            )
+        else:
+            ok, detail = await _cs_set_http_integration(
+                self.hass,
+                entry.data[CONF_CS_BASE_URL],
+                entry.data[CONF_CS_API_TOKEN],
+                entry.data[CONF_CS_APPLICATION_ID],
+                url,
+                exists=bool(self._pending_existing_url),
+            )
+            status = (
+                f"✅ HTTP integration {detail} on ChirpStack with URL `{url}`."
+                if ok
+                else f"⚠️ Could not auto-configure ChirpStack ({detail}). "
+                f"Add the URL manually: `{url}`"
+            )
+
+        return self.async_show_form(
+            step_id="apply",
             data_schema=vol.Schema({}),
-            description_placeholders={"webhook_url": url},
+            description_placeholders={"status": status, "webhook_url": url},
         )
 
 
@@ -662,6 +890,110 @@ async def _cs_list_applications(
         for a in (payload.get("result") or [])
         if a.get("id")
     ]
+
+
+_PRIVATE_IP_RE = re.compile(r"://(\d+)\.(\d+)\.")
+
+
+def _looks_internal(url: str) -> bool:
+    """Return True if the URL is unlikely to be reachable from outside the LAN.
+
+    ChirpStack must be able to POST to this URL, so warn the user about
+    localhost, .local, internal HA hostnames, or RFC1918 private IPs.
+    """
+    lower = url.lower()
+    if "://localhost" in lower or "://127." in lower or "://0.0.0.0" in lower:
+        return True
+    if (
+        ".local:" in lower
+        or ".local/" in lower
+        or lower.endswith(".local")
+        or "://homeassistant" in lower
+        or "://hassio" in lower
+    ):
+        return True
+    m = _PRIVATE_IP_RE.search(lower)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        if a == 10:
+            return True
+        if a == 192 and b == 168:
+            return True
+        if a == 172 and 16 <= b <= 31:
+            return True
+    return False
+
+
+async def _cs_get_http_integration_url(
+    hass, base_url: str, token: str, application_id: str
+) -> tuple[bool, str | None, str | None]:
+    """Probe ChirpStack for the HTTP integration on this application.
+
+    Returns ``(reachable, existing_url, error)``:
+    - ``reachable``: did the API answer at all
+    - ``existing_url``: the configured event_endpoint_url, or None if missing
+    - ``error``: short error message when not reachable
+    """
+    session = async_get_clientsession(hass)
+    base = base_url.rstrip("/")
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    url = f"{base}/api/applications/{application_id}/integrations/http"
+    try:
+        async with session.get(url, headers=headers, timeout=_HTTP_TIMEOUT) as resp:
+            if resp.status == 404:
+                return True, None, None
+            if resp.status >= 400:
+                text = await resp.text()
+                return False, None, f"HTTP {resp.status}: {text[:200]}"
+            payload = await resp.json()
+    except (asyncio.TimeoutError, aiohttp.ClientError) as err:
+        return False, None, f"Cannot reach ChirpStack: {err}"
+
+    integration = payload.get("integration") or {}
+    return (
+        True,
+        integration.get("eventEndpointUrl") or integration.get("event_endpoint_url"),
+        None,
+    )
+
+
+async def _cs_set_http_integration(
+    hass,
+    base_url: str,
+    token: str,
+    application_id: str,
+    event_endpoint_url: str,
+    *,
+    exists: bool,
+) -> tuple[bool, str]:
+    """Create (POST) or update (PUT) the HTTP integration. Caller probes first."""
+    session = async_get_clientsession(hass)
+    base = base_url.rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    url = f"{base}/api/applications/{application_id}/integrations/http"
+    body = {
+        "integration": {
+            "applicationId": application_id,
+            "headers": {},
+            "encoding": "JSON",
+            "eventEndpointUrl": event_endpoint_url,
+        }
+    }
+    method = "PUT" if exists else "POST"
+    try:
+        async with session.request(
+            method, url, json=body, headers=headers, timeout=_HTTP_TIMEOUT
+        ) as resp:
+            if resp.status >= 400:
+                text = await resp.text()
+                return False, f"HTTP {resp.status}: {text[:200]}"
+    except (asyncio.TimeoutError, aiohttp.ClientError) as err:
+        return False, f"Cannot reach ChirpStack: {err}"
+    return True, "updated" if exists else "created"
 
 
 async def _cs_list_devices(
