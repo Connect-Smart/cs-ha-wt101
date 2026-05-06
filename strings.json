@@ -124,7 +124,25 @@
             "ttn_device_id": "Device ID",
             "cs_dev_eui": "Device EUI"
           }
+        },
+        "reconfigure": {
+          "title": "Reconfigure thermostat",
+          "description": "Update the sensors and limits for this thermostat. The bound LoRaWAN device cannot be changed here — remove and re-add the thermostat to swap devices.",
+          "data": {
+            "name": "Name",
+            "current_temp_sensor": "Current temperature sensor (optional)",
+            "target_temp_sensor": "Target temperature sensor (optional)",
+            "motor_position_sensor": "Motor position sensor (optional)",
+            "motor_stroke_sensor": "Motor stroke sensor (optional)",
+            "fport": "Application fPort",
+            "min_temp": "Minimum target temperature (°C)",
+            "max_temp": "Maximum target temperature (°C)",
+            "tolerance": "Target temperature tolerance (°C)"
+          }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Thermostat updated."
       }
     }
   }

@@ -361,6 +361,61 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
     def _hub_entry(self) -> ConfigEntry:
         return self._get_entry()
 
+    def _common_schema(self, current: dict[str, Any] | None = None) -> vol.Schema:
+        """Schema shared by the add (user) step and the reconfigure step.
+
+        ``current`` pre-fills fields with existing values so the reconfigure
+        form shows what is configured right now. For the add flow it is None
+        and only the static defaults apply.
+        """
+        cur = current or {}
+
+        def opt_sensor(key: str) -> Any:
+            return vol.Optional(
+                key, description={"suggested_value": cur.get(key)}
+            )
+
+        def opt_number(key: str, fallback: float) -> Any:
+            return vol.Optional(key, default=cur.get(key, fallback))
+
+        return vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=cur.get(CONF_NAME, vol.UNDEFINED)): str,
+                opt_sensor(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                opt_sensor(CONF_TARGET_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                opt_sensor(CONF_MOTOR_POSITION_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                opt_sensor(CONF_MOTOR_STROKE_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                opt_number(CONF_FPORT, DEFAULT_FPORT): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1, max=255, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                opt_number(CONF_MIN_TEMP, DEFAULT_MIN_TEMP): NumberSelector(
+                    NumberSelectorConfig(
+                        min=5, max=35, step=0.5, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                opt_number(CONF_MAX_TEMP, DEFAULT_MAX_TEMP): NumberSelector(
+                    NumberSelectorConfig(
+                        min=5, max=35, step=0.5, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                opt_number(CONF_TOLERANCE, DEFAULT_TOLERANCE): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+            }
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -368,51 +423,41 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             self._common = user_input
             return await self.async_step_device()
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME): str,
-                vol.Optional(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_TARGET_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_MOTOR_POSITION_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_MOTOR_STROKE_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_FPORT, default=DEFAULT_FPORT): NumberSelector(
-                    NumberSelectorConfig(
-                        min=1, max=255, step=1, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                vol.Optional(
-                    CONF_MIN_TEMP, default=DEFAULT_MIN_TEMP
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=5, max=35, step=0.5, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                vol.Optional(
-                    CONF_MAX_TEMP, default=DEFAULT_MAX_TEMP
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=5, max=35, step=0.5, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                vol.Optional(
-                    CONF_TOLERANCE, default=DEFAULT_TOLERANCE
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
-                    )
-                ),
-            }
+        return self.async_show_form(
+            step_id="user", data_schema=self._common_schema()
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit an existing thermostat. Device identifier is preserved."""
+        subentry = self._get_reconfigure_subentry()
+        current = dict(subentry.data)
+
+        if user_input is not None:
+            # Strip empty optional sensor pickers so the entity falls back to
+            # the webhook source instead of tracking a non-existent entity.
+            cleaned = {k: v for k, v in user_input.items() if v not in (None, "")}
+            new_data = {**current, **cleaned}
+            for key in (
+                CONF_CURRENT_TEMP_SENSOR,
+                CONF_TARGET_TEMP_SENSOR,
+                CONF_MOTOR_POSITION_SENSOR,
+                CONF_MOTOR_STROKE_SENSOR,
+            ):
+                if key not in cleaned:
+                    new_data.pop(key, None)
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                data=new_data,
+                title=new_data[CONF_NAME],
+            )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self._common_schema(current),
+        )
 
     async def async_step_device(
         self, user_input: dict[str, Any] | None = None
