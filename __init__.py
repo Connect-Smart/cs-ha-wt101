@@ -27,19 +27,25 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# ChirpStack codec output keys we accept for current and target temperature.
-_CURRENT_KEYS: tuple[str, ...] = (
-    "temperature",
-    "indoor_temperature",
-    "current_temperature",
-    "temp",
-)
-_TARGET_KEYS: tuple[str, ...] = (
-    "temperature_target",
-    "target_temperature",
-    "target_temp",
-    "setpoint",
-)
+# ChirpStack codec output keys we accept per logical field. Order matters:
+# the first key found in the decoded `object` wins. Canonical Milesight names
+# come first; aliases follow for tolerance with custom codecs.
+_FIELD_KEYS: dict[str, tuple[str, ...]] = {
+    "current_temperature": (
+        "temperature",
+        "indoor_temperature",
+        "current_temperature",
+        "temp",
+    ),
+    "target_temperature": (
+        "target_temperature",
+        "temperature_target",
+        "target_temp",
+        "setpoint",
+    ),
+    "motor_position": ("motor_position",),
+    "motor_stroke": ("motor_stroke", "motor_stroke_size"),
+}
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -129,37 +135,38 @@ async def _handle_chirpstack_uplink(
     if not isinstance(obj, dict):
         _LOGGER.debug(
             "ChirpStack uplink for %s has no decoded 'object' — load the "
-            "Milesight WT101 codec in ChirpStack so temperature fields are "
-            "decoded",
+            "Milesight WT101 codec in ChirpStack so fields are decoded",
             dev_eui,
         )
         return
 
-    current = _pick_temperature(obj, _CURRENT_KEYS)
-    target = _pick_temperature(obj, _TARGET_KEYS)
+    extracted: dict[str, float] = {}
+    for field, candidates in _FIELD_KEYS.items():
+        value = _pick_numeric(obj, candidates)
+        if value is not None:
+            extracted[field] = value
 
-    if current is None and target is None:
+    if not extracted:
         _LOGGER.debug(
-            "ChirpStack uplink for %s carried no recognised temperature "
-            "fields (object keys: %s)",
+            "ChirpStack uplink for %s carried no recognised fields "
+            "(object keys: %s)",
             dev_eui,
             list(obj.keys()),
         )
         return
 
     async_dispatcher_send(
-        hass, cs_uplink_signal(entry.entry_id, dev_eui), current, target
+        hass, cs_uplink_signal(entry.entry_id, dev_eui), extracted
     )
 
 
-def _pick_temperature(obj: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+def _pick_numeric(obj: dict[str, Any], keys: tuple[str, ...]) -> float | None:
     """Return the first numeric value found under any of the candidate keys."""
     for key in keys:
         if key not in obj:
             continue
-        value = obj[key]
         try:
-            return float(value)
+            return float(obj[key])
         except (TypeError, ValueError):
             continue
     return None

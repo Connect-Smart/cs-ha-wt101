@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "wt101_climate"
-PLATFORMS: list[str] = ["climate", "button", "number", "switch"]
+PLATFORMS: list[str] = ["climate", "button", "number", "sensor", "switch"]
 
 # Subentry type — one thermostat per subentry under a hub config entry.
 SUBENTRY_TYPE_THERMOSTAT = "thermostat"
@@ -28,6 +28,8 @@ def cs_uplink_signal(entry_id: str, dev_eui: str) -> str:
 # Subentry-level (per thermostat) keys.
 CONF_CURRENT_TEMP_SENSOR = "current_temp_sensor"
 CONF_TARGET_TEMP_SENSOR = "target_temp_sensor"
+CONF_MOTOR_POSITION_SENSOR = "motor_position_sensor"
+CONF_MOTOR_STROKE_SENSOR = "motor_stroke_sensor"
 CONF_FPORT = "fport"
 CONF_MIN_TEMP = "min_temp"
 CONF_MAX_TEMP = "max_temp"

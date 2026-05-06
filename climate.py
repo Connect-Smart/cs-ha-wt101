@@ -159,11 +159,11 @@ class Wt101ClimateEntity(ClimateEntity):
                 )
 
     @callback
-    def _handle_uplink(
-        self, current: float | None, target: float | None
-    ) -> None:
+    def _handle_uplink(self, fields: dict[str, float]) -> None:
         """Apply temperatures pushed in by the ChirpStack webhook."""
         changed = False
+        current = fields.get("current_temperature")
+        target = fields.get("target_temperature")
         if current is not None and self._attr_current_temperature != current:
             self._attr_current_temperature = current
             changed = True

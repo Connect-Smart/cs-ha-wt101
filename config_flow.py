@@ -51,6 +51,8 @@ from .const import (
     CONF_FPORT,
     CONF_MAX_TEMP,
     CONF_MIN_TEMP,
+    CONF_MOTOR_POSITION_SENSOR,
+    CONF_MOTOR_STROKE_SENSOR,
     CONF_PLATFORM_TYPE,
     CONF_TARGET_TEMP_SENSOR,
     CONF_TOLERANCE,
@@ -374,6 +376,12 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                     EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(CONF_TARGET_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(CONF_MOTOR_POSITION_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(CONF_MOTOR_STROKE_SENSOR): EntitySelector(
                     EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(CONF_FPORT, default=DEFAULT_FPORT): NumberSelector(
