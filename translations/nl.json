@@ -81,7 +81,7 @@
             "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
             "external_offline_mode": "Wat de WT101 doet na de timeout.",
             "setpoint_source": "Een thermostaat (climate: de ingestelde doeltemperatuur wordt gebruikt), input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
-            "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
+            "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert. Na een herstart of herconfiguratie krijgt de knop altijd eerst de waarde van de bron.",
             "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks.",
             "current_temp_sensor": "Alleen voor TTN of andere integraties: de sensor met de temperatuur die de WT101 zelf meldt. Leeg laten bij ChirpStack met webhook.",
             "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook."
@@ -130,7 +130,7 @@
             "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
             "external_offline_mode": "Wat de WT101 doet na de timeout.",
             "setpoint_source": "Een thermostaat (climate: de ingestelde doeltemperatuur wordt gebruikt), input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
-            "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
+            "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert. Na een herstart of herconfiguratie krijgt de knop altijd eerst de waarde van de bron.",
             "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks.",
             "current_temp_sensor": "Alleen voor TTN of andere integraties: de sensor met de temperatuur die de WT101 zelf meldt. Leeg laten bij ChirpStack met webhook.",
             "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook."

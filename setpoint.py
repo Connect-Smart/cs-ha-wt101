@@ -108,7 +108,9 @@ class SetpointArbiter:
                 return NO_ACTION  # stale: our downlink has not been applied yet
             return self._resolve(value, source)
 
-        if previous is not None and value != previous:
+        if previous is None:
+            return self._initial_sync(source)
+        if value != previous:
             return self._local_change(value, source)
         return self._enforce(source)
 
@@ -144,6 +146,20 @@ class SetpointArbiter:
         self._gave_up_on = abandoned
         self._clear_pending()
         return Action(gave_up=abandoned)
+
+    def _initial_sync(self, source: float | None) -> Action:
+        """First report since (re)start or reconfigure: align to the source.
+
+        Applies in every priority — a knob change made while HA was down
+        cannot be told apart from a stale value, and after configuring a
+        source the device is expected to follow it right away.
+        """
+        if source is None:
+            return NO_ACTION
+        wanted = quantize(source)
+        if wanted == self.reported:
+            return NO_ACTION
+        return Action(send=wanted)
 
     def _local_change(self, value: float, source: float | None) -> Action:
         """The knob (or another controller) changed the target on the device."""

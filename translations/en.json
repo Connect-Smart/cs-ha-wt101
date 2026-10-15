@@ -159,7 +159,7 @@
             "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
             "external_offline_mode": "What the WT101 does after the timeout.",
             "setpoint_source": "A thermostat (climate: its target temperature is used), input_number, number or sensor whose value becomes the WT101 target temperature. Replaces an automation that sets the climate target: HA only sends when the value really changes and waits for the device to confirm, so LoRaWAN delays cannot cause a loop.",
-            "setpoint_priority": "What happens when someone changes the target on the knob itself.",
+            "setpoint_priority": "What happens when someone changes the target on the knob itself. After a restart or reconfigure the knob always first gets the source value.",
             "setpoint_grace": "How long HA waits for an uplink confirming a new target before retrying. About 2× the WT101 reporting interval plus a margin. ChirpStack hubs with the webhook confirm after 2 uplinks already.",
             "current_temp_sensor": "Only for TTN or other integrations: the sensor holding the temperature the WT101 itself reports. Leave empty for ChirpStack with the webhook.",
             "target_temp_sensor": "Not for picking a thermostat — use \"Follow target temperature from\" for that. This is the sensor holding the target the WT101 itself reports (e.g. from TTN). Leave empty for ChirpStack with the webhook."
@@ -208,7 +208,7 @@
             "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
             "external_offline_mode": "What the WT101 does after the timeout.",
             "setpoint_source": "A thermostat (climate: its target temperature is used), input_number, number or sensor whose value becomes the WT101 target temperature. Replaces an automation that sets the climate target: HA only sends when the value really changes and waits for the device to confirm, so LoRaWAN delays cannot cause a loop.",
-            "setpoint_priority": "What happens when someone changes the target on the knob itself.",
+            "setpoint_priority": "What happens when someone changes the target on the knob itself. After a restart or reconfigure the knob always first gets the source value.",
             "setpoint_grace": "How long HA waits for an uplink confirming a new target before retrying. About 2× the WT101 reporting interval plus a margin. ChirpStack hubs with the webhook confirm after 2 uplinks already.",
             "current_temp_sensor": "Only for TTN or other integrations: the sensor holding the temperature the WT101 itself reports. Leave empty for ChirpStack with the webhook.",
             "target_temp_sensor": "Not for picking a thermostat — use \"Follow target temperature from\" for that. This is the sensor holding the target the WT101 itself reports (e.g. from TTN). Leave empty for ChirpStack with the webhook."

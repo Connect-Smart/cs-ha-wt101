@@ -54,6 +54,8 @@ CONF_SETPOINT_GRACE = "setpoint_grace"
 # device = knob wins until the source changes again,
 # source = the source value is restored,
 # sync   = the knob value is written back into the source (input_number/number).
+# In every priority the first device report after a (re)start or reconfigure
+# aligns the knob to the source.
 PRIORITY_DEVICE = "device"
 PRIORITY_SOURCE = "source"
 PRIORITY_SYNC = "sync"
