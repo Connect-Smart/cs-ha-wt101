@@ -605,6 +605,24 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
     def _hub_entry(self) -> ConfigEntry:
         return self._get_entry()
 
+    def _uplink_sensor_keys(self, cur: dict[str, Any]) -> list[str]:
+        """Uplink mirror pickers to show for this hub.
+
+        TTN has no webhook here, so these sensors are the only way data from
+        the WT101 reaches HA. ChirpStack hubs get everything from the webhook;
+        a picker is only shown there when it is already set, so it can be
+        cleared (after which it disappears).
+        """
+        keys = [
+            CONF_CURRENT_TEMP_SENSOR,
+            CONF_TARGET_TEMP_SENSOR,
+            CONF_MOTOR_POSITION_SENSOR,
+            CONF_MOTOR_STROKE_SENSOR,
+        ]
+        if self._hub_entry().data.get(CONF_PLATFORM_TYPE) != PLATFORM_CHIRPSTACK:
+            return keys
+        return [key for key in keys if cur.get(key)]
+
     def _common_schema(self, current: dict[str, Any] | None = None) -> vol.Schema:
         """Schema shared by the add (user) step and the reconfigure step.
 
@@ -646,18 +664,12 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                         min=5, max=180, step=1, mode=NumberSelectorMode.BOX
                     )
                 ),
-                opt_sensor(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                opt_sensor(CONF_TARGET_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                opt_sensor(CONF_MOTOR_POSITION_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
-                opt_sensor(CONF_MOTOR_STROKE_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor")
-                ),
+                **{
+                    opt_sensor(key): EntitySelector(
+                        EntitySelectorConfig(domain="sensor")
+                    )
+                    for key in self._uplink_sensor_keys(cur)
+                },
                 opt_number(CONF_FPORT, DEFAULT_FPORT): NumberSelector(
                     NumberSelectorConfig(
                         min=1, max=255, step=1, mode=NumberSelectorMode.BOX

@@ -56,7 +56,7 @@
       "step": {
         "user": {
           "title": "WT101-thermostaat toevoegen",
-          "description": "Stel naam en grenzen in. De gegevens van de application worden hergebruikt.\n\nDe sensorvelden zijn **optioneel** — laat ze leeg voor ChirpStack-hubs met de HTTP-integratie (de webhook werkt de entiteiten direct bij). Voor TTN, of als je al sensors uit een andere integratie hebt, kies ze hier.",
+          "description": "Stel naam en grenzen in. De gegevens van de application worden hergebruikt.\n\nGebruik **Doeltemperatuur volgen van** om een thermostaat of helper de doeltemperatuur te laten bepalen.\n\nDe WT101-uplink-sensors verschijnen alleen bij TTN-hubs: daar brengen ze de metingen van de WT101 zelf in HA. ChirpStack-hubs krijgen die rechtstreeks via de webhook.",
           "data": {
             "name": "Naam",
             "current_temp_sensor": "WT101 gemeten temperatuur — uplink-sensor (optioneel)",
@@ -105,7 +105,7 @@
         },
         "reconfigure": {
           "title": "Thermostaat herconfigureren",
-          "description": "Pas sensors en grenzen van deze thermostaat aan. Het gekoppelde LoRaWAN-device kan hier niet worden gewijzigd — verwijder en voeg de thermostaat opnieuw toe om van device te wisselen.",
+          "description": "Pas deze thermostaat aan. Het gekoppelde LoRaWAN-device kan hier niet worden gewijzigd — verwijder en voeg de thermostaat opnieuw toe om van device te wisselen.\n\nBij ChirpStack-hubs zie je een WT101-uplink-sensor alleen zolang die nog ingevuld is; maak hem leeg om hem te verwijderen (de webhook levert de data).",
           "data": {
             "name": "Naam",
             "current_temp_sensor": "WT101 gemeten temperatuur — uplink-sensor (optioneel)",
