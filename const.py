@@ -62,8 +62,9 @@ SETPOINT_PRIORITIES: tuple[str, ...] = (
     PRIORITY_SOURCE,
     PRIORITY_SYNC,
 )
-# Source domains HA can write back to (needed for sync / UI changes).
-WRITABLE_SETPOINT_DOMAINS: tuple[str, ...] = ("input_number", "number")
+# Source domains HA can write back to (needed for sync / UI changes). For a
+# climate source the value is its target (``temperature`` attribute).
+WRITABLE_SETPOINT_DOMAINS: tuple[str, ...] = ("input_number", "number", "climate")
 
 # What the WT101 does when external readings stop arriving (ff f8 byte).
 EXTERNAL_OFFLINE_MODES: dict[str, int] = {

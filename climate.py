@@ -102,6 +102,19 @@ def _numeric_state(state) -> float | None:
         return None
 
 
+def _setpoint_reading(state) -> float | None:
+    """Value of a setpoint source: a climate's target, else the numeric state."""
+    if state is None or state.domain != "climate":
+        return _numeric_state(state)
+    if state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return None
+    try:
+        return float(state.attributes[ATTR_TEMPERATURE])
+    except (KeyError, TypeError, ValueError):
+        # e.g. hvac_mode off or a heat_cool thermostat without one target
+        return None
+
+
 class Wt101ClimateEntity(ClimateEntity):
     """One climate entity bound to one WT101 thermostat (one subentry)."""
 
@@ -194,6 +207,11 @@ class Wt101ClimateEntity(ClimateEntity):
                 )
             )
 
+        if self._setpoint_source == self.entity_id:
+            _LOGGER.warning(
+                "%s: setpoint source points at itself; ignoring it", self.entity_id
+            )
+            self._setpoint_source = None
         if self._setpoint_source:
             self.async_on_remove(
                 async_track_state_change_event(
@@ -265,7 +283,7 @@ class Wt101ClimateEntity(ClimateEntity):
 
     @callback
     def _handle_setpoint_source_change(self, event: Event) -> None:
-        value = _numeric_state(event.data.get("new_state"))
+        value = _setpoint_reading(event.data.get("new_state"))
         if value is None:
             return
         self._schedule(self._arbiter.request(self._clamp(value)))
@@ -337,10 +355,14 @@ class Wt101ClimateEntity(ClimateEntity):
         domain = split_entity_id(self._setpoint_source)[0]
         if domain not in WRITABLE_SETPOINT_DOMAINS:
             return
+        if domain == "climate":
+            service, data = "set_temperature", {ATTR_TEMPERATURE: value}
+        else:
+            service, data = "set_value", {"value": value}
         await self.hass.services.async_call(
             domain,
-            "set_value",
-            {ATTR_ENTITY_ID: self._setpoint_source, "value": value},
+            service,
+            {ATTR_ENTITY_ID: self._setpoint_source, **data},
             blocking=True,
         )
 
@@ -353,5 +375,5 @@ class Wt101ClimateEntity(ClimateEntity):
     def _source_value(self) -> float | None:
         if not self._setpoint_source:
             return None
-        value = _numeric_state(self.hass.states.get(self._setpoint_source))
+        value = _setpoint_reading(self.hass.states.get(self._setpoint_source))
         return None if value is None else self._clamp(value)

@@ -659,7 +659,9 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                 ),
                 # Setpoint source — an HA entity that dictates the target.
                 opt_sensor(CONF_SETPOINT_SOURCE): EntitySelector(
-                    EntitySelectorConfig(domain=["input_number", "number", "sensor"])
+                    EntitySelectorConfig(
+                        domain=["climate", "input_number", "number", "sensor"]
+                    )
                 ),
                 vol.Optional(
                     CONF_SETPOINT_PRIORITY,

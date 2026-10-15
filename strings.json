@@ -141,7 +141,7 @@
             "external_send_interval": "How often HA pushes the reading. Set this to (at least) the WT101 reporting interval: downlinks are only delivered on the next uplink, so a shorter interval makes the queue grow. ChirpStack hubs with the webhook push once per uplink automatically.",
             "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
             "external_offline_mode": "What the WT101 does after the timeout.",
-            "setpoint_source": "An input_number, number or sensor whose value becomes the WT101 target temperature. Replaces an automation that sets the climate target: HA only sends when the value really changes and waits for the device to confirm, so LoRaWAN delays cannot cause a loop.",
+            "setpoint_source": "A thermostat (climate: its target temperature is used), input_number, number or sensor whose value becomes the WT101 target temperature. Replaces an automation that sets the climate target: HA only sends when the value really changes and waits for the device to confirm, so LoRaWAN delays cannot cause a loop.",
             "setpoint_priority": "What happens when someone changes the target on the knob itself.",
             "setpoint_grace": "How long HA waits for an uplink confirming a new target before retrying. About 2× the WT101 reporting interval plus a margin. ChirpStack hubs with the webhook confirm after 2 uplinks already."
           }
@@ -188,7 +188,7 @@
             "external_send_interval": "How often HA pushes the reading. Set this to (at least) the WT101 reporting interval: downlinks are only delivered on the next uplink, so a shorter interval makes the queue grow. ChirpStack hubs with the webhook push once per uplink automatically.",
             "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
             "external_offline_mode": "What the WT101 does after the timeout.",
-            "setpoint_source": "An input_number, number or sensor whose value becomes the WT101 target temperature. Replaces an automation that sets the climate target: HA only sends when the value really changes and waits for the device to confirm, so LoRaWAN delays cannot cause a loop.",
+            "setpoint_source": "A thermostat (climate: its target temperature is used), input_number, number or sensor whose value becomes the WT101 target temperature. Replaces an automation that sets the climate target: HA only sends when the value really changes and waits for the device to confirm, so LoRaWAN delays cannot cause a loop.",
             "setpoint_priority": "What happens when someone changes the target on the knob itself.",
             "setpoint_grace": "How long HA waits for an uplink confirming a new target before retrying. About 2× the WT101 reporting interval plus a margin. ChirpStack hubs with the webhook confirm after 2 uplinks already."
           }
@@ -199,7 +199,7 @@
       },
       "error": {
         "external_interval_too_long": "The send interval must be shorter than the external sensor timeout.",
-        "setpoint_sync_needs_writable": "Writing back to the source needs an input_number or number entity as setpoint source."
+        "setpoint_sync_needs_writable": "Writing back to the source needs a thermostat (climate), input_number or number entity as setpoint source."
       }
     }
   },
@@ -215,7 +215,7 @@
       "options": {
         "device": "Knob wins until the source changes again",
         "source": "Source wins, knob changes are reverted",
-        "sync": "Write the knob value back to the source (input_number/number)"
+        "sync": "Write the knob value back to the source (thermostat/input_number/number)"
       }
     }
   }

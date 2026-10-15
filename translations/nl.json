@@ -80,7 +80,7 @@
             "external_send_interval": "Hoe vaak HA de meting doorstuurt. Zet dit op (minimaal) het rapportage-interval van de WT101: downlinks worden pas bij de volgende uplink afgeleverd, dus een korter interval laat de wachtrij groeien. ChirpStack-hubs met webhook sturen automatisch één keer per uplink.",
             "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
             "external_offline_mode": "Wat de WT101 doet na de timeout.",
-            "setpoint_source": "Een input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
+            "setpoint_source": "Een thermostaat (climate: de ingestelde doeltemperatuur wordt gebruikt), input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
             "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
             "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks."
           }
@@ -127,7 +127,7 @@
             "external_send_interval": "Hoe vaak HA de meting doorstuurt. Zet dit op (minimaal) het rapportage-interval van de WT101: downlinks worden pas bij de volgende uplink afgeleverd, dus een korter interval laat de wachtrij groeien. ChirpStack-hubs met webhook sturen automatisch één keer per uplink.",
             "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
             "external_offline_mode": "Wat de WT101 doet na de timeout.",
-            "setpoint_source": "Een input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
+            "setpoint_source": "Een thermostaat (climate: de ingestelde doeltemperatuur wordt gebruikt), input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
             "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
             "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks."
           }
@@ -138,7 +138,7 @@
       },
       "error": {
         "external_interval_too_long": "Het verzendinterval moet korter zijn dan de timeout van de externe sensor.",
-        "setpoint_sync_needs_writable": "Terugschrijven naar de bron vereist een input_number- of number-entiteit als bron."
+        "setpoint_sync_needs_writable": "Terugschrijven naar de bron vereist een thermostaat (climate), input_number of number als bron."
       }
     }
   },
@@ -154,7 +154,7 @@
       "options": {
         "device": "Knop wint tot de bron weer verandert",
         "source": "Bron wint, knopwijzigingen worden teruggezet",
-        "sync": "Knopwaarde terugschrijven naar de bron (input_number/number)"
+        "sync": "Knopwaarde terugschrijven naar de bron (thermostaat/input_number/number)"
       }
     }
   },
