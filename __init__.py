@@ -47,6 +47,16 @@ _FIELD_KEYS: dict[str, tuple[str, ...]] = {
     "motor_stroke": ("motor_stroke", "motor_stroke_size"),
 }
 
+# Status fields the codec emits as strings (e.g. "fail: out of range").
+# They are passed through raw; the sensor entities normalise them.
+_STATUS_KEYS: dict[str, tuple[str, ...]] = {
+    "motor_calibration_result": (
+        "motor_calibration_result",
+        "calibration_result",
+    ),
+    "tamper_status": ("tamper_status", "tamper"),
+}
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a hub config entry."""
@@ -140,11 +150,15 @@ async def _handle_chirpstack_uplink(
         )
         return
 
-    extracted: dict[str, float] = {}
+    extracted: dict[str, float | str] = {}
     for field, candidates in _FIELD_KEYS.items():
         value = _pick_numeric(obj, candidates)
         if value is not None:
             extracted[field] = value
+    for field, candidates in _STATUS_KEYS.items():
+        status = _pick_status(obj, candidates)
+        if status is not None:
+            extracted[field] = status
 
     if not extracted:
         _LOGGER.debug(
@@ -169,4 +183,17 @@ def _pick_numeric(obj: dict[str, Any], keys: tuple[str, ...]) -> float | None:
             return float(obj[key])
         except (TypeError, ValueError):
             continue
+    return None
+
+
+def _pick_status(obj: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    """Return the first non-empty status value (string or code) as a string."""
+    for key in keys:
+        value = obj.get(key)
+        if isinstance(value, bool) or value is None:
+            continue
+        if isinstance(value, (str, int, float)):
+            text = str(value).strip()
+            if text:
+                return text
     return None

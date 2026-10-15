@@ -664,6 +664,37 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                         min=5, max=180, step=1, mode=NumberSelectorMode.BOX
                     )
                 ),
+                # External sensor mode — the WT101 regulates on this sensor instead of
+                # its own once the "external sensor mode" switch is on. Any
+                # numeric sensor is accepted: many room sensors lack a
+                # temperature device_class.
+                opt_sensor(CONF_EXTERNAL_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
+                opt_number(
+                    CONF_EXTERNAL_SEND_INTERVAL, DEFAULT_EXTERNAL_SEND_INTERVAL
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1, max=60, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                opt_number(CONF_EXTERNAL_TIMEOUT, DEFAULT_EXTERNAL_TIMEOUT): NumberSelector(
+                    NumberSelectorConfig(
+                        min=3, max=60, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    CONF_EXTERNAL_OFFLINE_MODE,
+                    default=cur.get(
+                        CONF_EXTERNAL_OFFLINE_MODE, DEFAULT_EXTERNAL_OFFLINE_MODE
+                    ),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(EXTERNAL_OFFLINE_MODES),
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_EXTERNAL_OFFLINE_MODE,
+                    )
+                ),
                 **{
                     opt_sensor(key): EntitySelector(
                         EntitySelectorConfig(domain="sensor")
@@ -688,34 +719,6 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                 opt_number(CONF_TOLERANCE, DEFAULT_TOLERANCE): NumberSelector(
                     NumberSelectorConfig(
                         min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                # External sensor mode — only used once its switch is turned on.
-                opt_sensor(CONF_EXTERNAL_TEMP_SENSOR): EntitySelector(
-                    EntitySelectorConfig(domain="sensor", device_class="temperature")
-                ),
-                opt_number(
-                    CONF_EXTERNAL_SEND_INTERVAL, DEFAULT_EXTERNAL_SEND_INTERVAL
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=1, max=60, step=1, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                opt_number(CONF_EXTERNAL_TIMEOUT, DEFAULT_EXTERNAL_TIMEOUT): NumberSelector(
-                    NumberSelectorConfig(
-                        min=3, max=60, step=1, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                vol.Optional(
-                    CONF_EXTERNAL_OFFLINE_MODE,
-                    default=cur.get(
-                        CONF_EXTERNAL_OFFLINE_MODE, DEFAULT_EXTERNAL_OFFLINE_MODE
-                    ),
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=list(EXTERNAL_OFFLINE_MODES),
-                        mode=SelectSelectorMode.DROPDOWN,
-                        translation_key=CONF_EXTERNAL_OFFLINE_MODE,
                     )
                 ),
             }

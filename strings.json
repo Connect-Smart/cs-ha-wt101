@@ -105,6 +105,23 @@
       },
       "motor_stroke": {
         "name": "Motor stroke"
+      },
+      "calibration_result": {
+        "name": "Calibration result",
+        "state": {
+          "success": "Success",
+          "fail_out_of_range": "Failed: out of range",
+          "fail_uninstalled": "Failed: not installed",
+          "cleared": "Calibration cleared",
+          "temperature_control_disabled": "Temperature control disabled"
+        }
+      },
+      "tamper_status": {
+        "name": "Tamper status",
+        "state": {
+          "installed": "Installed",
+          "uninstalled": "Uninstalled"
+        }
       }
     }
   },
@@ -128,7 +145,7 @@
             "min_temp": "Minimum target temperature (°C)",
             "max_temp": "Maximum target temperature (°C)",
             "tolerance": "Target temperature tolerance (°C)",
-            "external_temp_sensor": "External temperature sensor (optional)",
+            "external_temp_sensor": "Measure current temperature with (external sensor, optional)",
             "external_send_interval": "External sensor: send interval (min)",
             "external_timeout": "External sensor: timeout on the WT101 (min)",
             "external_offline_mode": "External sensor: when readings stop arriving",
@@ -137,7 +154,7 @@
             "setpoint_grace": "Setpoint: max wait for confirmation (min)"
           },
           "data_description": {
-            "external_temp_sensor": "Used only while the \"external sensor mode\" switch is on. The WT101 then regulates the valve on this temperature instead of its built-in sensor.",
+            "external_temp_sensor": "Any numeric sensor in °C (°F is converted). Only used while the \"… external sensor mode\" switch is on: the WT101 then regulates the valve on this temperature instead of its built-in sensor.",
             "external_send_interval": "How often HA pushes the reading. Set this to (at least) the WT101 reporting interval: downlinks are only delivered on the next uplink, so a shorter interval makes the queue grow. ChirpStack hubs with the webhook push once per uplink automatically.",
             "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
             "external_offline_mode": "What the WT101 does after the timeout.",
@@ -177,7 +194,7 @@
             "min_temp": "Minimum target temperature (°C)",
             "max_temp": "Maximum target temperature (°C)",
             "tolerance": "Target temperature tolerance (°C)",
-            "external_temp_sensor": "External temperature sensor (optional)",
+            "external_temp_sensor": "Measure current temperature with (external sensor, optional)",
             "external_send_interval": "External sensor: send interval (min)",
             "external_timeout": "External sensor: timeout on the WT101 (min)",
             "external_offline_mode": "External sensor: when readings stop arriving",
@@ -186,7 +203,7 @@
             "setpoint_grace": "Setpoint: max wait for confirmation (min)"
           },
           "data_description": {
-            "external_temp_sensor": "Used only while the \"external sensor mode\" switch is on. The WT101 then regulates the valve on this temperature instead of its built-in sensor.",
+            "external_temp_sensor": "Any numeric sensor in °C (°F is converted). Only used while the \"… external sensor mode\" switch is on: the WT101 then regulates the valve on this temperature instead of its built-in sensor.",
             "external_send_interval": "How often HA pushes the reading. Set this to (at least) the WT101 reporting interval: downlinks are only delivered on the next uplink, so a shorter interval makes the queue grow. ChirpStack hubs with the webhook push once per uplink automatically.",
             "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
             "external_offline_mode": "What the WT101 does after the timeout.",
