@@ -45,6 +45,26 @@ CONF_EXTERNAL_TIMEOUT = "external_timeout"
 CONF_EXTERNAL_SEND_INTERVAL = "external_send_interval"
 CONF_EXTERNAL_OFFLINE_MODE = "external_offline_mode"
 
+# Setpoint source: an HA entity that dictates the WT101 target temperature.
+CONF_SETPOINT_SOURCE = "setpoint_source"
+CONF_SETPOINT_PRIORITY = "setpoint_priority"
+CONF_SETPOINT_GRACE = "setpoint_grace"
+
+# Who wins when the knob on the device is turned while a source is set:
+# device = knob wins until the source changes again,
+# source = the source value is restored,
+# sync   = the knob value is written back into the source (input_number/number).
+PRIORITY_DEVICE = "device"
+PRIORITY_SOURCE = "source"
+PRIORITY_SYNC = "sync"
+SETPOINT_PRIORITIES: tuple[str, ...] = (
+    PRIORITY_DEVICE,
+    PRIORITY_SOURCE,
+    PRIORITY_SYNC,
+)
+# Source domains HA can write back to (needed for sync / UI changes).
+WRITABLE_SETPOINT_DOMAINS: tuple[str, ...] = ("input_number", "number")
+
 # What the WT101 does when external readings stop arriving (ff f8 byte).
 EXTERNAL_OFFLINE_MODES: dict[str, int] = {
     "keep": 0,
@@ -64,6 +84,8 @@ DEFAULT_TOLERANCE = 0.5
 DEFAULT_EXTERNAL_TIMEOUT = 60  # minutes, device accepts 3–60
 DEFAULT_EXTERNAL_SEND_INTERVAL = 10  # minutes, matches default report interval
 DEFAULT_EXTERNAL_OFFLINE_MODE = "internal"
+DEFAULT_SETPOINT_PRIORITY = PRIORITY_DEVICE
+DEFAULT_SETPOINT_GRACE = 25  # minutes, ~2 report intervals + margin
 DEFAULT_TTN_BASE_URL = "https://eu1.cloud.thethings.network"
 DEFAULT_CS_BASE_URL = "http://localhost:8080"
 

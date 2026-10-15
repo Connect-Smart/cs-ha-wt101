@@ -60,6 +60,9 @@ from .const import (
     CONF_MOTOR_POSITION_SENSOR,
     CONF_MOTOR_STROKE_SENSOR,
     CONF_PLATFORM_TYPE,
+    CONF_SETPOINT_GRACE,
+    CONF_SETPOINT_PRIORITY,
+    CONF_SETPOINT_SOURCE,
     CONF_TARGET_TEMP_SENSOR,
     CONF_TOLERANCE,
     CONF_TTN_API_KEY,
@@ -73,13 +76,18 @@ from .const import (
     DEFAULT_FPORT,
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
+    DEFAULT_SETPOINT_GRACE,
+    DEFAULT_SETPOINT_PRIORITY,
     DEFAULT_TOLERANCE,
     DEFAULT_TTN_BASE_URL,
     DOMAIN,
     EXTERNAL_OFFLINE_MODES,
     PLATFORM_CHIRPSTACK,
     PLATFORM_TTN,
+    PRIORITY_SYNC,
+    SETPOINT_PRIORITIES,
     SUBENTRY_TYPE_THERMOSTAT,
+    WRITABLE_SETPOINT_DOMAINS,
     WT101_BRAND_KEYS,
     WT101_MODEL_KEYS,
 )
@@ -649,6 +657,25 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                         min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
                     )
                 ),
+                # Setpoint source — an HA entity that dictates the target.
+                opt_sensor(CONF_SETPOINT_SOURCE): EntitySelector(
+                    EntitySelectorConfig(domain=["input_number", "number", "sensor"])
+                ),
+                vol.Optional(
+                    CONF_SETPOINT_PRIORITY,
+                    default=cur.get(CONF_SETPOINT_PRIORITY, DEFAULT_SETPOINT_PRIORITY),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(SETPOINT_PRIORITIES),
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_SETPOINT_PRIORITY,
+                    )
+                ),
+                opt_number(CONF_SETPOINT_GRACE, DEFAULT_SETPOINT_GRACE): NumberSelector(
+                    NumberSelectorConfig(
+                        min=5, max=180, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
                 # External sensor mode — only used once its switch is turned on.
                 opt_sensor(CONF_EXTERNAL_TEMP_SENSOR): EntitySelector(
                     EntitySelectorConfig(domain="sensor", device_class="temperature")
@@ -682,13 +709,18 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
 
     @staticmethod
     def _validate(user_input: dict[str, Any]) -> dict[str, str]:
-        """The device must get a reading well before it times out."""
+        """Cross-field checks for the thermostat form."""
         interval = user_input.get(
             CONF_EXTERNAL_SEND_INTERVAL, DEFAULT_EXTERNAL_SEND_INTERVAL
         )
         timeout = user_input.get(CONF_EXTERNAL_TIMEOUT, DEFAULT_EXTERNAL_TIMEOUT)
         if interval >= timeout:
             return {"base": "external_interval_too_long"}
+        source = user_input.get(CONF_SETPOINT_SOURCE)
+        if user_input.get(CONF_SETPOINT_PRIORITY) == PRIORITY_SYNC and (
+            not source or source.split(".", 1)[0] not in WRITABLE_SETPOINT_DOMAINS
+        ):
+            return {"base": "setpoint_sync_needs_writable"}
         return {}
 
     async def async_step_user(
@@ -728,6 +760,7 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                 CONF_MOTOR_POSITION_SENSOR,
                 CONF_MOTOR_STROKE_SENSOR,
                 CONF_EXTERNAL_TEMP_SENSOR,
+                CONF_SETPOINT_SOURCE,
             ):
                 if key not in cleaned:
                     new_data.pop(key, None)

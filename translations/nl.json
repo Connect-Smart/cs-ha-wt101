@@ -70,13 +70,19 @@
             "external_temp_sensor": "Externe temperatuursensor (optioneel)",
             "external_send_interval": "Externe sensor: verzendinterval (min)",
             "external_timeout": "Externe sensor: timeout op de WT101 (min)",
-            "external_offline_mode": "Externe sensor: als metingen uitblijven"
+            "external_offline_mode": "Externe sensor: als metingen uitblijven",
+            "setpoint_source": "Bron doeltemperatuur (optioneel)",
+            "setpoint_priority": "Doeltemperatuur: als aan de knop gedraaid wordt",
+            "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)"
           },
           "data_description": {
             "external_temp_sensor": "Wordt alleen gebruikt als de schakelaar \"external sensor mode\" aan staat. De WT101 regelt de klep dan op deze temperatuur in plaats van op zijn eigen sensor.",
             "external_send_interval": "Hoe vaak HA de meting doorstuurt. Zet dit op (minimaal) het rapportage-interval van de WT101: downlinks worden pas bij de volgende uplink afgeleverd, dus een korter interval laat de wachtrij groeien. ChirpStack-hubs met webhook sturen automatisch één keer per uplink.",
             "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
-            "external_offline_mode": "Wat de WT101 doet na de timeout."
+            "external_offline_mode": "Wat de WT101 doet na de timeout.",
+            "setpoint_source": "Een input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
+            "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
+            "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks."
           }
         },
         "device": {
@@ -111,13 +117,19 @@
             "external_temp_sensor": "Externe temperatuursensor (optioneel)",
             "external_send_interval": "Externe sensor: verzendinterval (min)",
             "external_timeout": "Externe sensor: timeout op de WT101 (min)",
-            "external_offline_mode": "Externe sensor: als metingen uitblijven"
+            "external_offline_mode": "Externe sensor: als metingen uitblijven",
+            "setpoint_source": "Bron doeltemperatuur (optioneel)",
+            "setpoint_priority": "Doeltemperatuur: als aan de knop gedraaid wordt",
+            "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)"
           },
           "data_description": {
             "external_temp_sensor": "Wordt alleen gebruikt als de schakelaar \"external sensor mode\" aan staat. De WT101 regelt de klep dan op deze temperatuur in plaats van op zijn eigen sensor.",
             "external_send_interval": "Hoe vaak HA de meting doorstuurt. Zet dit op (minimaal) het rapportage-interval van de WT101: downlinks worden pas bij de volgende uplink afgeleverd, dus een korter interval laat de wachtrij groeien. ChirpStack-hubs met webhook sturen automatisch één keer per uplink.",
             "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
-            "external_offline_mode": "Wat de WT101 doet na de timeout."
+            "external_offline_mode": "Wat de WT101 doet na de timeout.",
+            "setpoint_source": "Een input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
+            "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
+            "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks."
           }
         }
       },
@@ -125,7 +137,8 @@
         "reconfigure_successful": "Thermostaat bijgewerkt."
       },
       "error": {
-        "external_interval_too_long": "Het verzendinterval moet korter zijn dan de timeout van de externe sensor."
+        "external_interval_too_long": "Het verzendinterval moet korter zijn dan de timeout van de externe sensor.",
+        "setpoint_sync_needs_writable": "Terugschrijven naar de bron vereist een input_number- of number-entiteit als bron."
       }
     }
   },
@@ -135,6 +148,13 @@
         "keep": "Huidige klepstand vasthouden",
         "internal": "Terug naar de ingebouwde sensor",
         "off": "Temperatuurregeling uitschakelen"
+      }
+    },
+    "setpoint_priority": {
+      "options": {
+        "device": "Knop wint tot de bron weer verandert",
+        "source": "Bron wint, knopwijzigingen worden teruggezet",
+        "sync": "Knopwaarde terugschrijven naar de bron (input_number/number)"
       }
     }
   },
