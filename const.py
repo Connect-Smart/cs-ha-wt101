@@ -38,6 +38,20 @@ CONF_TOLERANCE = "tolerance"
 CONF_TTN_DEVICE_ID = "ttn_device_id"
 CONF_CS_DEV_EUI = "cs_dev_eui"
 
+# External sensor mode (user guide 6.3.4): HA pushes a temperature from any
+# HA sensor and the WT101 regulates on that instead of its built-in sensor.
+CONF_EXTERNAL_TEMP_SENSOR = "external_temp_sensor"
+CONF_EXTERNAL_TIMEOUT = "external_timeout"
+CONF_EXTERNAL_SEND_INTERVAL = "external_send_interval"
+CONF_EXTERNAL_OFFLINE_MODE = "external_offline_mode"
+
+# What the WT101 does when external readings stop arriving (ff f8 byte).
+EXTERNAL_OFFLINE_MODES: dict[str, int] = {
+    "keep": 0,
+    "internal": 1,
+    "off": 2,
+}
+
 # Platform identifiers
 PLATFORM_TTN = "ttn"
 PLATFORM_CHIRPSTACK = "chirpstack"
@@ -47,6 +61,9 @@ DEFAULT_FPORT = 85
 DEFAULT_MIN_TEMP = 5.0
 DEFAULT_MAX_TEMP = 30.0
 DEFAULT_TOLERANCE = 0.5
+DEFAULT_EXTERNAL_TIMEOUT = 60  # minutes, device accepts 3–60
+DEFAULT_EXTERNAL_SEND_INTERVAL = 10  # minutes, matches default report interval
+DEFAULT_EXTERNAL_OFFLINE_MODE = "internal"
 DEFAULT_TTN_BASE_URL = "https://eu1.cloud.thethings.network"
 DEFAULT_CS_BASE_URL = "http://localhost:8080"
 

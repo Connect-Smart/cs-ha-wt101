@@ -50,6 +50,10 @@ from .const import (
     CONF_CS_WEBHOOK_ID,
     CONF_CS_WEBHOOK_URL_OVERRIDE,
     CONF_CURRENT_TEMP_SENSOR,
+    CONF_EXTERNAL_OFFLINE_MODE,
+    CONF_EXTERNAL_SEND_INTERVAL,
+    CONF_EXTERNAL_TEMP_SENSOR,
+    CONF_EXTERNAL_TIMEOUT,
     CONF_FPORT,
     CONF_MAX_TEMP,
     CONF_MIN_TEMP,
@@ -63,12 +67,16 @@ from .const import (
     CONF_TTN_BASE_URL,
     CONF_TTN_DEVICE_ID,
     DEFAULT_CS_BASE_URL,
+    DEFAULT_EXTERNAL_OFFLINE_MODE,
+    DEFAULT_EXTERNAL_SEND_INTERVAL,
+    DEFAULT_EXTERNAL_TIMEOUT,
     DEFAULT_FPORT,
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
     DEFAULT_TOLERANCE,
     DEFAULT_TTN_BASE_URL,
     DOMAIN,
+    EXTERNAL_OFFLINE_MODES,
     PLATFORM_CHIRPSTACK,
     PLATFORM_TTN,
     SUBENTRY_TYPE_THERMOSTAT,
@@ -641,18 +649,62 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                         min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
                     )
                 ),
+                # External sensor mode — only used once its switch is turned on.
+                opt_sensor(CONF_EXTERNAL_TEMP_SENSOR): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+                opt_number(
+                    CONF_EXTERNAL_SEND_INTERVAL, DEFAULT_EXTERNAL_SEND_INTERVAL
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1, max=60, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                opt_number(CONF_EXTERNAL_TIMEOUT, DEFAULT_EXTERNAL_TIMEOUT): NumberSelector(
+                    NumberSelectorConfig(
+                        min=3, max=60, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    CONF_EXTERNAL_OFFLINE_MODE,
+                    default=cur.get(
+                        CONF_EXTERNAL_OFFLINE_MODE, DEFAULT_EXTERNAL_OFFLINE_MODE
+                    ),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(EXTERNAL_OFFLINE_MODES),
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_EXTERNAL_OFFLINE_MODE,
+                    )
+                ),
             }
         )
+
+    @staticmethod
+    def _validate(user_input: dict[str, Any]) -> dict[str, str]:
+        """The device must get a reading well before it times out."""
+        interval = user_input.get(
+            CONF_EXTERNAL_SEND_INTERVAL, DEFAULT_EXTERNAL_SEND_INTERVAL
+        )
+        timeout = user_input.get(CONF_EXTERNAL_TIMEOUT, DEFAULT_EXTERNAL_TIMEOUT)
+        if interval >= timeout:
+            return {"base": "external_interval_too_long"}
+        return {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         """Step 1: name, sensors, fport, limits."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._common = user_input
-            return await self.async_step_device()
+            errors = self._validate(user_input)
+            if not errors:
+                self._common = user_input
+                return await self.async_step_device()
         return self.async_show_form(
-            step_id="user", data_schema=self._common_schema()
+            step_id="user",
+            data_schema=self._common_schema(user_input),
+            errors=errors,
         )
 
     async def async_step_reconfigure(
@@ -662,7 +714,10 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         subentry = self._get_reconfigure_subentry()
         current = dict(subentry.data)
 
+        errors: dict[str, str] = {}
         if user_input is not None:
+            errors = self._validate(user_input)
+        if user_input is not None and not errors:
             # Strip empty optional sensor pickers so the entity falls back to
             # the webhook source instead of tracking a non-existent entity.
             cleaned = {k: v for k, v in user_input.items() if v not in (None, "")}
@@ -672,6 +727,7 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                 CONF_TARGET_TEMP_SENSOR,
                 CONF_MOTOR_POSITION_SENSOR,
                 CONF_MOTOR_STROKE_SENSOR,
+                CONF_EXTERNAL_TEMP_SENSOR,
             ):
                 if key not in cleaned:
                     new_data.pop(key, None)
@@ -684,7 +740,8 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._common_schema(current),
+            data_schema=self._common_schema({**current, **(user_input or {})}),
+            errors=errors,
         )
 
     async def async_step_device(

@@ -70,6 +70,28 @@ def build_valve_calibration_payload() -> bytes:
     return b"\xff\xad\xff"
 
 
+def build_external_sensor_mode_payload(enable: bool, timeout_min: int) -> bytes:
+    """ff c4 + enable(1B) + UINT8 timeout (min, 3–60).
+
+    When enabled the WT101 ignores its built-in sensor and regulates on the
+    temperature pushed via ``build_external_temperature_payload``. If no value
+    arrives within the timeout it falls back per the offline control mode.
+    """
+    timeout = max(3, min(60, int(timeout_min)))
+    return b"\xff\xc4" + struct.pack("BB", 1 if enable else 0, timeout)
+
+
+def build_external_offline_mode_payload(mode: int) -> bytes:
+    """ff f8 + mode: 0 keep valve, 1 internal sensor, 2 control off."""
+    return b"\xff\xf8" + struct.pack("B", mode)
+
+
+def build_external_temperature_payload(temperature_c: float) -> bytes:
+    """03 + INT16LE value×10 + ff (trailing byte per the official encoder)."""
+    value_units = max(-32768, min(32767, int(round(temperature_c * 10))))
+    return b"\x03" + struct.pack("<h", value_units) + b"\xff"
+
+
 # =====================================================================
 # Downlink dispatch
 # =====================================================================

@@ -56,15 +56,27 @@
       "step": {
         "user": {
           "title": "WT101-thermostaat toevoegen",
-          "description": "Kies de sensors met de uplink-data voor deze thermostaat en stel de grenzen in. De gegevens van de application worden hergebruikt.",
+          "description": "Stel naam en grenzen in. De gegevens van de application worden hergebruikt.\n\nDe sensorvelden zijn **optioneel** — laat ze leeg voor ChirpStack-hubs met de HTTP-integratie (de webhook werkt de entiteiten direct bij). Voor TTN, of als je al sensors uit een andere integratie hebt, kies ze hier.",
           "data": {
             "name": "Naam",
-            "current_temp_sensor": "Sensor huidige temperatuur",
-            "target_temp_sensor": "Sensor doeltemperatuur",
+            "current_temp_sensor": "Sensor huidige temperatuur (optioneel)",
+            "target_temp_sensor": "Sensor doeltemperatuur (optioneel)",
+            "motor_position_sensor": "Sensor motorpositie (optioneel)",
+            "motor_stroke_sensor": "Sensor motorslag (optioneel)",
             "fport": "Application fPort",
             "min_temp": "Minimale doeltemperatuur (°C)",
             "max_temp": "Maximale doeltemperatuur (°C)",
-            "tolerance": "Tolerantie doeltemperatuur (°C)"
+            "tolerance": "Tolerantie doeltemperatuur (°C)",
+            "external_temp_sensor": "Externe temperatuursensor (optioneel)",
+            "external_send_interval": "Externe sensor: verzendinterval (min)",
+            "external_timeout": "Externe sensor: timeout op de WT101 (min)",
+            "external_offline_mode": "Externe sensor: als metingen uitblijven"
+          },
+          "data_description": {
+            "external_temp_sensor": "Wordt alleen gebruikt als de schakelaar \"external sensor mode\" aan staat. De WT101 regelt de klep dan op deze temperatuur in plaats van op zijn eigen sensor.",
+            "external_send_interval": "Hoe vaak HA de meting doorstuurt. Zet dit op (minimaal) het rapportage-interval van de WT101: downlinks worden pas bij de volgende uplink afgeleverd, dus een korter interval laat de wachtrij groeien. ChirpStack-hubs met webhook sturen automatisch één keer per uplink.",
+            "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
+            "external_offline_mode": "Wat de WT101 doet na de timeout."
           }
         },
         "device": {
@@ -82,7 +94,54 @@
             "ttn_device_id": "Device ID",
             "cs_dev_eui": "Device EUI"
           }
+        },
+        "reconfigure": {
+          "title": "Thermostaat herconfigureren",
+          "description": "Pas sensors en grenzen van deze thermostaat aan. Het gekoppelde LoRaWAN-device kan hier niet worden gewijzigd — verwijder en voeg de thermostaat opnieuw toe om van device te wisselen.",
+          "data": {
+            "name": "Naam",
+            "current_temp_sensor": "Sensor huidige temperatuur (optioneel)",
+            "target_temp_sensor": "Sensor doeltemperatuur (optioneel)",
+            "motor_position_sensor": "Sensor motorpositie (optioneel)",
+            "motor_stroke_sensor": "Sensor motorslag (optioneel)",
+            "fport": "Application fPort",
+            "min_temp": "Minimale doeltemperatuur (°C)",
+            "max_temp": "Maximale doeltemperatuur (°C)",
+            "tolerance": "Tolerantie doeltemperatuur (°C)",
+            "external_temp_sensor": "Externe temperatuursensor (optioneel)",
+            "external_send_interval": "Externe sensor: verzendinterval (min)",
+            "external_timeout": "Externe sensor: timeout op de WT101 (min)",
+            "external_offline_mode": "Externe sensor: als metingen uitblijven"
+          },
+          "data_description": {
+            "external_temp_sensor": "Wordt alleen gebruikt als de schakelaar \"external sensor mode\" aan staat. De WT101 regelt de klep dan op deze temperatuur in plaats van op zijn eigen sensor.",
+            "external_send_interval": "Hoe vaak HA de meting doorstuurt. Zet dit op (minimaal) het rapportage-interval van de WT101: downlinks worden pas bij de volgende uplink afgeleverd, dus een korter interval laat de wachtrij groeien. ChirpStack-hubs met webhook sturen automatisch één keer per uplink.",
+            "external_timeout": "Krijgt de WT101 zo lang (3–60 min) geen meting, dan geldt de terugvaloptie hieronder. Moet langer zijn dan het verzendinterval.",
+            "external_offline_mode": "Wat de WT101 doet na de timeout."
+          }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Thermostaat bijgewerkt."
+      },
+      "error": {
+        "external_interval_too_long": "Het verzendinterval moet korter zijn dan de timeout van de externe sensor."
+      }
+    }
+  },
+  "selector": {
+    "external_offline_mode": {
+      "options": {
+        "keep": "Huidige klepstand vasthouden",
+        "internal": "Terug naar de ingebouwde sensor",
+        "off": "Temperatuurregeling uitschakelen"
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "external_sensor_mode": {
+        "name": "Externe sensormodus"
       }
     }
   }

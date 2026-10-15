@@ -38,6 +38,19 @@
         "data": {
           "cs_application_id": "Application ID"
         }
+      },
+      "chirpstack_webhook": {
+        "title": "ChirpStack HTTP integration — URL",
+        "description": "{status}\n\nReview the URL ChirpStack should POST uplinks to. The default is HA's auto-detected URL; replace it if you use a reverse proxy, custom domain, or external port.\n\nMake sure the Milesight WT101 codec is loaded on the device profile so `temperature`, `target_temperature`, `motor_position` and `motor_stroke` are decoded into the `object` field.",
+        "data": {
+          "webhook_url": "Webhook URL (leave default to use HA's external URL)",
+          "overwrite": "Overwrite existing HTTP integration on ChirpStack",
+          "skip_auto_config": "Skip auto-configure (I'll set up the HTTP integration manually)"
+        }
+      },
+      "chirpstack_webhook_apply": {
+        "title": "ChirpStack HTTP integration — result",
+        "description": "{status}\n\nClick **Submit** to finish setup."
       }
     },
     "error": {
@@ -45,6 +58,54 @@
     },
     "abort": {
       "already_configured": "This LoRaWAN application is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ChirpStack HTTP integration — URL",
+        "description": "{status}\n\nReview or change the URL ChirpStack uses. Leaving the default applies HA's auto-detected URL.",
+        "data": {
+          "webhook_url": "Webhook URL",
+          "overwrite": "Overwrite existing HTTP integration on ChirpStack",
+          "skip_auto_config": "Skip auto-configure"
+        }
+      },
+      "apply": {
+        "title": "ChirpStack HTTP integration — result",
+        "description": "{status}\n\nClick **Submit** to close."
+      }
+    },
+    "abort": {
+      "no_webhook": "This hub has no webhook configured (TTN hubs do not use a webhook)."
+    }
+  },
+  "entity": {
+    "button": {
+      "calibrate_valve": {
+        "name": "Calibrate valve"
+      }
+    },
+    "number": {
+      "temperature_offset": {
+        "name": "Temperature offset"
+      }
+    },
+    "switch": {
+      "temperature_control": {
+        "name": "Temperature control"
+      },
+      "external_sensor_mode": {
+        "name": "External sensor mode"
+      }
+    },
+    "sensor": {
+      "motor_position": {
+        "name": "Motor position"
+      },
+      "motor_stroke": {
+        "name": "Motor stroke"
+      }
     }
   },
   "config_subentries": {
@@ -56,15 +117,27 @@
       "step": {
         "user": {
           "title": "Add a WT101 thermostat",
-          "description": "Pick the sensors that hold the uplink data for this thermostat and set the limits. Credentials are inherited from the parent application.",
+          "description": "Set the name and limits. Credentials are inherited from the parent application.\n\nThe sensor pickers are **optional** — leave them empty for ChirpStack hubs that use the HTTP integration (the climate entity is updated directly by the webhook). For TTN, or if you already have sensors from another integration, pick them here.",
           "data": {
             "name": "Name",
-            "current_temp_sensor": "Current temperature sensor",
-            "target_temp_sensor": "Target temperature sensor",
+            "current_temp_sensor": "Current temperature sensor (optional)",
+            "target_temp_sensor": "Target temperature sensor (optional)",
+            "motor_position_sensor": "Motor position sensor (optional)",
+            "motor_stroke_sensor": "Motor stroke sensor (optional)",
             "fport": "Application fPort",
             "min_temp": "Minimum target temperature (°C)",
             "max_temp": "Maximum target temperature (°C)",
-            "tolerance": "Target temperature tolerance (°C)"
+            "tolerance": "Target temperature tolerance (°C)",
+            "external_temp_sensor": "External temperature sensor (optional)",
+            "external_send_interval": "External sensor: send interval (min)",
+            "external_timeout": "External sensor: timeout on the WT101 (min)",
+            "external_offline_mode": "External sensor: when readings stop arriving"
+          },
+          "data_description": {
+            "external_temp_sensor": "Used only while the \"external sensor mode\" switch is on. The WT101 then regulates the valve on this temperature instead of its built-in sensor.",
+            "external_send_interval": "How often HA pushes the reading. Set this to (at least) the WT101 reporting interval: downlinks are only delivered on the next uplink, so a shorter interval makes the queue grow. ChirpStack hubs with the webhook push once per uplink automatically.",
+            "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
+            "external_offline_mode": "What the WT101 does after the timeout."
           }
         },
         "device": {
@@ -82,7 +155,47 @@
             "ttn_device_id": "Device ID",
             "cs_dev_eui": "Device EUI"
           }
+        },
+        "reconfigure": {
+          "title": "Reconfigure thermostat",
+          "description": "Update the sensors and limits for this thermostat. The bound LoRaWAN device cannot be changed here — remove and re-add the thermostat to swap devices.",
+          "data": {
+            "name": "Name",
+            "current_temp_sensor": "Current temperature sensor (optional)",
+            "target_temp_sensor": "Target temperature sensor (optional)",
+            "motor_position_sensor": "Motor position sensor (optional)",
+            "motor_stroke_sensor": "Motor stroke sensor (optional)",
+            "fport": "Application fPort",
+            "min_temp": "Minimum target temperature (°C)",
+            "max_temp": "Maximum target temperature (°C)",
+            "tolerance": "Target temperature tolerance (°C)",
+            "external_temp_sensor": "External temperature sensor (optional)",
+            "external_send_interval": "External sensor: send interval (min)",
+            "external_timeout": "External sensor: timeout on the WT101 (min)",
+            "external_offline_mode": "External sensor: when readings stop arriving"
+          },
+          "data_description": {
+            "external_temp_sensor": "Used only while the \"external sensor mode\" switch is on. The WT101 then regulates the valve on this temperature instead of its built-in sensor.",
+            "external_send_interval": "How often HA pushes the reading. Set this to (at least) the WT101 reporting interval: downlinks are only delivered on the next uplink, so a shorter interval makes the queue grow. ChirpStack hubs with the webhook push once per uplink automatically.",
+            "external_timeout": "If the WT101 receives no reading for this long (3–60 min) it applies the fallback below. Must be longer than the send interval.",
+            "external_offline_mode": "What the WT101 does after the timeout."
+          }
         }
+      },
+      "abort": {
+        "reconfigure_successful": "Thermostat updated."
+      },
+      "error": {
+        "external_interval_too_long": "The send interval must be shorter than the external sensor timeout."
+      }
+    }
+  },
+  "selector": {
+    "external_offline_mode": {
+      "options": {
+        "keep": "Keep the current valve position",
+        "internal": "Switch back to the built-in sensor",
+        "off": "Stop temperature control"
       }
     }
   }
