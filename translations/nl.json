@@ -59,10 +59,10 @@
           "description": "Stel naam en grenzen in. De gegevens van de application worden hergebruikt.\n\nDe sensorvelden zijn **optioneel** — laat ze leeg voor ChirpStack-hubs met de HTTP-integratie (de webhook werkt de entiteiten direct bij). Voor TTN, of als je al sensors uit een andere integratie hebt, kies ze hier.",
           "data": {
             "name": "Naam",
-            "current_temp_sensor": "Sensor huidige temperatuur (optioneel)",
-            "target_temp_sensor": "Sensor doeltemperatuur (optioneel)",
-            "motor_position_sensor": "Sensor motorpositie (optioneel)",
-            "motor_stroke_sensor": "Sensor motorslag (optioneel)",
+            "current_temp_sensor": "WT101 gemeten temperatuur — uplink-sensor (optioneel)",
+            "target_temp_sensor": "WT101 gemelde doeltemperatuur — uplink-sensor (optioneel)",
+            "motor_position_sensor": "WT101 motorpositie — uplink-sensor (optioneel)",
+            "motor_stroke_sensor": "WT101 motorslag — uplink-sensor (optioneel)",
             "fport": "Application fPort",
             "min_temp": "Minimale doeltemperatuur (°C)",
             "max_temp": "Maximale doeltemperatuur (°C)",
@@ -71,7 +71,7 @@
             "external_send_interval": "Externe sensor: verzendinterval (min)",
             "external_timeout": "Externe sensor: timeout op de WT101 (min)",
             "external_offline_mode": "Externe sensor: als metingen uitblijven",
-            "setpoint_source": "Bron doeltemperatuur (optioneel)",
+            "setpoint_source": "Doeltemperatuur volgen van (thermostaat/helper, optioneel)",
             "setpoint_priority": "Doeltemperatuur: als aan de knop gedraaid wordt",
             "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)"
           },
@@ -82,7 +82,9 @@
             "external_offline_mode": "Wat de WT101 doet na de timeout.",
             "setpoint_source": "Een thermostaat (climate: de ingestelde doeltemperatuur wordt gebruikt), input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
             "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
-            "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks."
+            "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks.",
+            "current_temp_sensor": "Alleen voor TTN of andere integraties: de sensor met de temperatuur die de WT101 zelf meldt. Leeg laten bij ChirpStack met webhook.",
+            "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook."
           }
         },
         "device": {
@@ -106,10 +108,10 @@
           "description": "Pas sensors en grenzen van deze thermostaat aan. Het gekoppelde LoRaWAN-device kan hier niet worden gewijzigd — verwijder en voeg de thermostaat opnieuw toe om van device te wisselen.",
           "data": {
             "name": "Naam",
-            "current_temp_sensor": "Sensor huidige temperatuur (optioneel)",
-            "target_temp_sensor": "Sensor doeltemperatuur (optioneel)",
-            "motor_position_sensor": "Sensor motorpositie (optioneel)",
-            "motor_stroke_sensor": "Sensor motorslag (optioneel)",
+            "current_temp_sensor": "WT101 gemeten temperatuur — uplink-sensor (optioneel)",
+            "target_temp_sensor": "WT101 gemelde doeltemperatuur — uplink-sensor (optioneel)",
+            "motor_position_sensor": "WT101 motorpositie — uplink-sensor (optioneel)",
+            "motor_stroke_sensor": "WT101 motorslag — uplink-sensor (optioneel)",
             "fport": "Application fPort",
             "min_temp": "Minimale doeltemperatuur (°C)",
             "max_temp": "Maximale doeltemperatuur (°C)",
@@ -118,7 +120,7 @@
             "external_send_interval": "Externe sensor: verzendinterval (min)",
             "external_timeout": "Externe sensor: timeout op de WT101 (min)",
             "external_offline_mode": "Externe sensor: als metingen uitblijven",
-            "setpoint_source": "Bron doeltemperatuur (optioneel)",
+            "setpoint_source": "Doeltemperatuur volgen van (thermostaat/helper, optioneel)",
             "setpoint_priority": "Doeltemperatuur: als aan de knop gedraaid wordt",
             "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)"
           },
@@ -129,7 +131,9 @@
             "external_offline_mode": "Wat de WT101 doet na de timeout.",
             "setpoint_source": "Een thermostaat (climate: de ingestelde doeltemperatuur wordt gebruikt), input_number, number of sensor waarvan de waarde de doeltemperatuur van de WT101 wordt. Vervangt een automatisering die de climate-doeltemperatuur zet: HA stuurt alleen bij een echte wijziging en wacht op bevestiging van het apparaat, zodat LoRaWAN-vertraging geen loop kan veroorzaken.",
             "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert.",
-            "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks."
+            "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks.",
+            "current_temp_sensor": "Alleen voor TTN of andere integraties: de sensor met de temperatuur die de WT101 zelf meldt. Leeg laten bij ChirpStack met webhook.",
+            "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook."
           }
         }
       },

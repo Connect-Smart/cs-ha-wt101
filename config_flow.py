@@ -625,6 +625,27 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         return vol.Schema(
             {
                 vol.Required(CONF_NAME, default=cur.get(CONF_NAME, vol.UNDEFINED)): str,
+                # Setpoint source — an HA entity that dictates the target.
+                opt_sensor(CONF_SETPOINT_SOURCE): EntitySelector(
+                    EntitySelectorConfig(
+                        domain=["climate", "input_number", "number", "sensor"]
+                    )
+                ),
+                vol.Optional(
+                    CONF_SETPOINT_PRIORITY,
+                    default=cur.get(CONF_SETPOINT_PRIORITY, DEFAULT_SETPOINT_PRIORITY),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(SETPOINT_PRIORITIES),
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_SETPOINT_PRIORITY,
+                    )
+                ),
+                opt_number(CONF_SETPOINT_GRACE, DEFAULT_SETPOINT_GRACE): NumberSelector(
+                    NumberSelectorConfig(
+                        min=5, max=180, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
                 opt_sensor(CONF_CURRENT_TEMP_SENSOR): EntitySelector(
                     EntitySelectorConfig(domain="sensor")
                 ),
@@ -655,27 +676,6 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                 opt_number(CONF_TOLERANCE, DEFAULT_TOLERANCE): NumberSelector(
                     NumberSelectorConfig(
                         min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
-                    )
-                ),
-                # Setpoint source — an HA entity that dictates the target.
-                opt_sensor(CONF_SETPOINT_SOURCE): EntitySelector(
-                    EntitySelectorConfig(
-                        domain=["climate", "input_number", "number", "sensor"]
-                    )
-                ),
-                vol.Optional(
-                    CONF_SETPOINT_PRIORITY,
-                    default=cur.get(CONF_SETPOINT_PRIORITY, DEFAULT_SETPOINT_PRIORITY),
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=list(SETPOINT_PRIORITIES),
-                        mode=SelectSelectorMode.DROPDOWN,
-                        translation_key=CONF_SETPOINT_PRIORITY,
-                    )
-                ),
-                opt_number(CONF_SETPOINT_GRACE, DEFAULT_SETPOINT_GRACE): NumberSelector(
-                    NumberSelectorConfig(
-                        min=5, max=180, step=1, mode=NumberSelectorMode.BOX
                     )
                 ),
                 # External sensor mode — only used once its switch is turned on.
