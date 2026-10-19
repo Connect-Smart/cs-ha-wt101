@@ -37,6 +37,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_CS_DEV_EUI,
@@ -287,6 +288,9 @@ class _Wt101UplinkEnumSensor(SensorEntity, RestoreEntity):
         self._attr_translation_key = self._unique_suffix
         self._attr_native_value = None
         self._raw_value: str | None = None
+        # Set on every report, so a repeated identical result (e.g. a second
+        # "fail: out of range") is still visible as a new update.
+        self._reported_at: str | None = None
         self._attr_device_info = _device_info(subentry)
 
     def _normalize(self, raw: str) -> str | None:
@@ -296,7 +300,7 @@ class _Wt101UplinkEnumSensor(SensorEntity, RestoreEntity):
     def extra_state_attributes(self) -> dict[str, str] | None:
         if self._raw_value is None:
             return None
-        return {"raw_value": self._raw_value}
+        return {"raw_value": self._raw_value, "reported_at": self._reported_at}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -305,6 +309,7 @@ class _Wt101UplinkEnumSensor(SensorEntity, RestoreEntity):
         if last is not None and last.state in (self.options or []):
             self._attr_native_value = last.state
             self._raw_value = last.attributes.get("raw_value")
+            self._reported_at = last.attributes.get("reported_at")
 
         dev_eui = self._subentry.data.get(CONF_CS_DEV_EUI)
         if dev_eui:
@@ -331,10 +336,9 @@ class _Wt101UplinkEnumSensor(SensorEntity, RestoreEntity):
                 raw,
             )
             return
-        if self._attr_native_value == value and self._raw_value == raw:
-            return
         self._attr_native_value = value
         self._raw_value = raw
+        self._reported_at = dt_util.utcnow().isoformat()
         self.async_write_ha_state()
 
 
