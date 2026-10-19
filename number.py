@@ -18,6 +18,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_THERMOSTAT,
 )
+from .calibration import raise_if_calibrating
 from .lorawan import async_send_downlink, build_temperature_calibration_payload
 
 
@@ -87,6 +88,7 @@ class Wt101TemperatureOffsetNumber(NumberEntity, RestoreEntity):
                 pass
 
     async def async_set_native_value(self, value: float) -> None:
+        raise_if_calibrating(self.hass, self._subentry.data)
         snapped = round(float(value) * 10) / 10
         snapped = max(
             self._attr_native_min_value, min(self._attr_native_max_value, snapped)

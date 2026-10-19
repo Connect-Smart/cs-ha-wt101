@@ -24,6 +24,13 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
+from .calibration import (
+    STATE_DONE,
+    calibration_signal,
+    device_key,
+    is_calibrating,
+    raise_if_calibrating,
+)
 from .const import (
     CONF_CS_DEV_EUI,
     CONF_EXTERNAL_OFFLINE_MODE,
@@ -122,6 +129,7 @@ class Wt101TemperatureControlSwitch(SwitchEntity, RestoreEntity):
         await self._set(False)
 
     async def _set(self, enable: bool) -> None:
+        raise_if_calibrating(self.hass, self._subentry.data)
         payload = build_temperature_control_enable_payload(enable)
         ok = await async_send_downlink(
             self.hass,
@@ -201,9 +209,14 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
         return {
             "external_sensor": self._source,
             "last_sent_temperature": self._last_sent_value,
+            # After a restart _last_sent_at only paces the timer; show it
+            # once a reading has actually been sent.
             "last_sent_at": (
-                self._last_sent_at.isoformat() if self._last_sent_at else None
+                self._last_sent_at.isoformat()
+                if self._last_sent_at and self._last_sent_value is not None
+                else None
             ),
+            "calibrating": is_calibrating(self.hass, self._subentry.data),
         }
 
     async def async_added_to_hass(self) -> None:
@@ -211,14 +224,29 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
         last = await self.async_get_last_state()
         if last is not None and last.state == "on" and self._source:
             # The device keeps the mode across HA restarts; just resume pushing.
+            # Count the restart as a send so the interval timer does not
+            # queue an extra downlink on top of the uplink-driven one.
             self._attr_is_on = True
+            self._last_sent_at = dt_util.utcnow()
             self._start_pushing()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                calibration_signal(device_key(self._subentry.data)),
+                self._handle_calibration,
+            )
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         self._stop_pushing()
         await super().async_will_remove_from_hass()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        raise_if_calibrating(self.hass, self._subentry.data)
+        await self._async_enable()
+
+    async def _async_enable(self) -> None:
+        """Send fallback + enable + first reading in one downlink."""
         if not self._source:
             raise HomeAssistantError(
                 "No external temperature sensor configured for this thermostat; "
@@ -248,6 +276,7 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        raise_if_calibrating(self.hass, self._subentry.data)
         ok = await async_send_downlink(
             self.hass,
             self._entry,
@@ -259,6 +288,13 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
             return
         self._attr_is_on = False
         self._stop_pushing()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_calibration(self, event: dict[str, Any]) -> None:
+        """Re-send the full mode after a calibration flushed the queue."""
+        if event["state"] == STATE_DONE and self._attr_is_on:
+            self.hass.async_create_task(self._async_enable())
         self.async_write_ha_state()
 
     @callback
@@ -306,6 +342,8 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
 
     async def _async_push(self) -> None:
         if not self._attr_is_on or self._sending:
+            return
+        if is_calibrating(self.hass, self._subentry.data):
             return
         value = self._read_source()
         if value is None:

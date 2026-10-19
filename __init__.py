@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
+from .calibration import async_finish as async_finish_calibration
 from .const import (
     CONF_CS_WEBHOOK_ID,
     CONF_PLATFORM_TYPE,
@@ -168,6 +169,11 @@ async def _handle_chirpstack_uplink(
             list(obj.keys()),
         )
         return
+
+    result = extracted.get("motor_calibration_result")
+    if isinstance(result, str):
+        # Release held downlinks before entities react to this uplink.
+        async_finish_calibration(hass, dev_eui, result)
 
     async_dispatcher_send(
         hass, cs_uplink_signal(entry.entry_id, dev_eui), extracted

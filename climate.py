@@ -39,6 +39,14 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .calibration import (
+    STATE_DONE,
+    STATE_STARTED,
+    calibration_signal,
+    device_key,
+    is_calibrating,
+    raise_if_calibrating,
+)
 from .const import (
     CONF_CS_DEV_EUI,
     CONF_CURRENT_TEMP_SENSOR,
@@ -184,6 +192,7 @@ class Wt101ClimateEntity(ClimateEntity):
             "setpoint_priority": self._arbiter.priority,
             "device_target_temperature": self._arbiter.reported,
             "pending_target_temperature": self._arbiter.pending,
+            "calibrating": is_calibrating(self.hass, self._subentry.data),
         }
 
     async def async_added_to_hass(self) -> None:
@@ -220,6 +229,15 @@ class Wt101ClimateEntity(ClimateEntity):
                     self._handle_setpoint_source_change,
                 )
             )
+
+        # Calibration flushes the queue and holds downlinks; resync after.
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                calibration_signal(device_key(self._subentry.data)),
+                self._handle_calibration,
+            )
+        )
 
         # Resolves pending targets when uplinks don't (lost downlink, TTN).
         self.async_on_remove(
@@ -289,7 +307,20 @@ class Wt101ClimateEntity(ClimateEntity):
         self._schedule(self._arbiter.request(self._clamp(value)))
         self.async_write_ha_state()
 
+    @callback
+    def _handle_calibration(self, event: dict[str, Any]) -> None:
+        if event["state"] == STATE_STARTED:
+            # The flush dropped any target downlink still waiting.
+            self._arbiter.forget_pending()
+        elif event["state"] == STATE_DONE:
+            source = self._source_value()
+            if source is not None:
+                self._schedule(self._arbiter.request(source))
+        self.async_write_ha_state()
+
     async def _async_tick(self, now: datetime) -> None:
+        if is_calibrating(self.hass, self._subentry.data):
+            return
         action = self._arbiter.on_tick(dt_util.utcnow(), self._source_value())
         if action != NO_ACTION:
             await self._async_apply(action)
@@ -313,6 +344,7 @@ class Wt101ClimateEntity(ClimateEntity):
                     f"{self._setpoint_source}; change that entity instead"
                 )
 
+        raise_if_calibrating(self.hass, self._subentry.data)
         await self._async_apply(self._arbiter.request(new_temp))
 
     # ------------------------------------------------------------------
@@ -332,7 +364,9 @@ class Wt101ClimateEntity(ClimateEntity):
                 action.gave_up,
                 self._arbiter.reported,
             )
-        if action.send is not None:
+        if action.send is not None and not is_calibrating(
+            self.hass, self._subentry.data
+        ):
             payload = build_target_temperature_payload(action.send, self._tolerance)
             ok = await async_send_downlink(
                 self.hass,

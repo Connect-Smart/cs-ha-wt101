@@ -89,6 +89,10 @@ class SetpointArbiter:
         self._sent_at = now
         self._uplinks = 0
 
+    def forget_pending(self) -> None:
+        """The queued downlink was flushed from the LNS (calibration)."""
+        self._clear_pending()
+
     def on_uplink(self) -> None:
         """Any uplink from the device arrived (ChirpStack webhook only)."""
         if self.pending is not None:

@@ -22,6 +22,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .calibration import is_calibrating
 from .const import (
     CONF_CS_API_TOKEN,
     CONF_CS_BASE_URL,
@@ -102,8 +103,23 @@ async def async_send_downlink(
     payload: bytes,
     *,
     label: str = "WT101",
+    force: bool = False,
+    replace_queue: bool = False,
 ) -> bool:
-    """POST a downlink to whichever LNS the hub points at."""
+    """Queue a downlink on whichever LNS the hub points at.
+
+    ``force`` bypasses the calibration hold (only the calibration itself
+    uses it). ``replace_queue`` drops everything already queued for the
+    device first, so this downlink is the next one it receives.
+    """
+    if not force and is_calibrating(hass, sub_data):
+        _LOGGER.debug(
+            "%s: holding downlink %s while the valve calibrates",
+            label,
+            payload.hex(),
+        )
+        return False
+
     fport = int(sub_data.get(CONF_FPORT, DEFAULT_FPORT))
     b64 = base64.b64encode(payload).decode("ascii")
     _LOGGER.debug(
@@ -116,9 +132,13 @@ async def async_send_downlink(
 
     platform = entry.data[CONF_PLATFORM_TYPE]
     if platform == PLATFORM_TTN:
-        return await _send_ttn(hass, entry, sub_data, b64, fport, label)
+        return await _send_ttn(
+            hass, entry, sub_data, b64, fport, label, replace_queue
+        )
     if platform == PLATFORM_CHIRPSTACK:
-        return await _send_chirpstack(hass, entry, sub_data, b64, fport, label)
+        return await _send_chirpstack(
+            hass, entry, sub_data, b64, fport, label, replace_queue
+        )
     _LOGGER.error("%s: unknown platform %s", label, platform)
     return False
 
@@ -130,6 +150,7 @@ async def _send_ttn(
     frm_payload_b64: str,
     fport: int,
     label: str,
+    replace_queue: bool,
 ) -> bool:
     hub = entry.data
     base_url = str(hub[CONF_TTN_BASE_URL]).rstrip("/")
@@ -139,7 +160,7 @@ async def _send_ttn(
 
     url = (
         f"{base_url}/api/v3/as/applications/{app_id}"
-        f"/devices/{device_id}/down/push"
+        f"/devices/{device_id}/down/{'replace' if replace_queue else 'push'}"
     )
     body = {
         "downlinks": [
@@ -155,7 +176,7 @@ async def _send_ttn(
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    return await _post(hass, url, body, headers, f"{label}/TTN")
+    return await _request(hass, "POST", url, headers, f"{label}/TTN", body)
 
 
 async def _send_chirpstack(
@@ -165,13 +186,23 @@ async def _send_chirpstack(
     data_b64: str,
     fport: int,
     label: str,
+    replace_queue: bool,
 ) -> bool:
     hub = entry.data
     base_url = str(hub[CONF_CS_BASE_URL]).rstrip("/")
     dev_eui = sub_data[CONF_CS_DEV_EUI]
     token = hub[CONF_CS_API_TOKEN]
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Grpc-Metadata-Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    label = f"{label}/ChirpStack"
 
     url = f"{base_url}/api/devices/{dev_eui}/queue"
+    if replace_queue and not await _flush_chirpstack_queue(hass, url, headers, label):
+        return False
     body = {
         "queueItem": {
             "fPort": fport,
@@ -180,42 +211,67 @@ async def _send_chirpstack(
             "devEui": dev_eui,
         }
     }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Grpc-Metadata-Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    return await _post(hass, url, body, headers, f"{label}/ChirpStack")
+    return await _request(hass, "POST", url, headers, label, body)
 
 
-async def _post(
+async def _flush_chirpstack_queue(
+    hass: HomeAssistant, url: str, headers: dict, label: str
+) -> bool:
+    """Empty the device queue if anything is waiting in it."""
+    listing = await _request(hass, "GET", url, headers, label, want_json=True)
+    if not isinstance(listing, dict):
+        return False
+    queued = int(listing.get("totalCount") or len(listing.get("result") or []))
+    if not queued:
+        return True
+    _LOGGER.info(
+        "%s: flushing %d queued downlink(s) before calibrating: %s",
+        label,
+        queued,
+        [
+            base64.b64decode(item.get("data") or "").hex()
+            for item in listing.get("result") or []
+        ],
+    )
+    return bool(await _request(hass, "DELETE", url, headers, label))
+
+
+async def _request(
     hass: HomeAssistant,
+    method: str,
     url: str,
-    body: dict,
     headers: dict,
     label: str,
-) -> bool:
+    body: dict | None = None,
+    *,
+    want_json: bool = False,
+) -> Any:
+    """HTTP call to the LNS; True/JSON on success, False on any failure."""
     session = async_get_clientsession(hass)
     try:
-        async with session.post(
-            url, json=body, headers=headers, timeout=_HTTP_TIMEOUT
+        async with session.request(
+            method, url, json=body, headers=headers, timeout=_HTTP_TIMEOUT
         ) as resp:
             if resp.status >= 400:
                 text = await resp.text()
                 _LOGGER.error(
-                    "%s downlink failed: HTTP %s — %s",
+                    "%s %s failed: HTTP %s — %s",
                     label,
+                    method,
                     resp.status,
                     text[:500],
                 )
                 return False
-            _LOGGER.debug("%s downlink queued (HTTP %s)", label, resp.status)
+            _LOGGER.debug("%s %s ok (HTTP %s)", label, method, resp.status)
+            if want_json:
+                return await resp.json(content_type=None)
             return True
     except asyncio.TimeoutError:
-        _LOGGER.error("%s downlink timed out", label)
+        _LOGGER.error("%s %s timed out", label, method)
     except aiohttp.ClientError as err:
-        _LOGGER.error("%s downlink HTTP error: %s", label, err)
+        _LOGGER.error("%s %s HTTP error: %s", label, method, err)
+    except ValueError as err:
+        _LOGGER.error("%s %s returned invalid JSON: %s", label, method, err)
     except Exception as err:  # noqa: BLE001
-        _LOGGER.exception("%s downlink unexpected error: %s", label, err)
+        _LOGGER.exception("%s %s unexpected error: %s", label, method, err)
     return False
