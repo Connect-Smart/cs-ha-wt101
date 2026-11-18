@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import math
 
 from .const import PRIORITY_SOURCE, PRIORITY_SYNC
 
@@ -29,9 +30,18 @@ _UPLINKS_TO_CONFIRM = 2
 _MAX_RETRIES = 2
 
 
+def whole_degrees(value: float) -> int:
+    """Round half up to whole °C, the resolution of the ff b1 target (INT8).
+
+    Python's ``round`` rounds half to even (20.5 → 20, 21.5 → 22), which
+    would make a half-degree setpoint source land inconsistently.
+    """
+    return int(math.floor(value + 0.5))
+
+
 def quantize(value: float) -> float:
     """The WT101 stores its target as whole °C (INT8), same rounding as ff b1."""
-    return float(int(round(value)))
+    return float(whole_degrees(value))
 
 
 @dataclass(frozen=True)

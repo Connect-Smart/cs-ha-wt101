@@ -72,7 +72,7 @@ from .const import (
     cs_uplink_signal,
 )
 from .lorawan import async_send_downlink, build_target_temperature_payload
-from .setpoint import NO_ACTION, Action, SetpointArbiter
+from .setpoint import NO_ACTION, Action, SetpointArbiter, quantize
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -329,7 +329,7 @@ class Wt101ClimateEntity(ClimateEntity):
         new_temp = kwargs.get(ATTR_TEMPERATURE)
         if new_temp is None:
             return
-        new_temp = self._clamp(round(float(new_temp)))
+        new_temp = self._clamp(quantize(float(new_temp)))
 
         if self._setpoint_source:
             domain = split_entity_id(self._setpoint_source)[0]

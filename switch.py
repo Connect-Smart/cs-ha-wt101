@@ -49,7 +49,9 @@ from .const import (
     cs_uplink_signal,
 )
 from .lorawan import (
+    async_send_calibration_trigger,
     async_send_downlink,
+    build_child_lock_payload,
     build_external_offline_mode_payload,
     build_external_sensor_mode_payload,
     build_external_temperature_payload,
@@ -79,6 +81,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 Wt101TemperatureControlSwitch(entry, subentry),
+                Wt101ChildLockSwitch(entry, subentry),
                 Wt101ExternalSensorSwitch(entry, subentry),
             ],
             config_subentry_id=subentry.subentry_id,
@@ -88,21 +91,29 @@ async def async_setup_entry(
         _add(subentry)
 
 
-class Wt101TemperatureControlSwitch(SwitchEntity, RestoreEntity):
-    """Enable or disable the WT101's internal temperature-control loop."""
+class _Wt101SettingSwitch(SwitchEntity, RestoreEntity):
+    """One on/off device setting, written with a single downlink.
+
+    The WT101 does not report these settings back, so the state is the last
+    value HA queued successfully (restored across restarts).
+    """
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_icon = "mdi:thermostat-cog"
+
+    # Subclass overrides:
+    _suffix: str = ""
+    _unique_suffix: str = ""
+    _default_on: bool = False
 
     def __init__(self, entry: ConfigEntry, subentry: ConfigSubentry) -> None:
         self._entry = entry
         self._subentry = subentry
         sub_data = subentry.data
 
-        self._attr_name = f"{sub_data[CONF_NAME]} temperature control"
-        self._attr_unique_id = f"{subentry.subentry_id}_temp_control"
-        self._attr_is_on = True
+        self._attr_name = f"{sub_data[CONF_NAME]} {self._suffix}"
+        self._attr_unique_id = f"{subentry.subentry_id}_{self._unique_suffix}"
+        self._attr_is_on = self._default_on
 
         identifier = (
             sub_data.get(CONF_TTN_DEVICE_ID)
@@ -130,17 +141,63 @@ class Wt101TemperatureControlSwitch(SwitchEntity, RestoreEntity):
 
     async def _set(self, enable: bool) -> None:
         raise_if_calibrating(self.hass, self._subentry.data)
+        if await self._async_send(enable):
+            self._attr_is_on = enable
+            self.async_write_ha_state()
+
+    async def _async_send(self, enable: bool) -> bool:
+        raise NotImplementedError
+
+
+class Wt101TemperatureControlSwitch(_Wt101SettingSwitch):
+    """Enable or disable the WT101's internal temperature-control loop."""
+
+    _suffix = "temperature control"
+    _unique_suffix = "temp_control"
+    _default_on = True
+    _attr_icon = "mdi:thermostat-cog"
+
+    async def _async_send(self, enable: bool) -> bool:
         payload = build_temperature_control_enable_payload(enable)
-        ok = await async_send_downlink(
+        if enable and not self._attr_is_on:
+            # Enabling starts one motor calibration (user guide 5.3): hold
+            # the other downlinks exactly like the calibrate button does.
+            return await async_send_calibration_trigger(
+                self.hass,
+                self._entry,
+                self._subentry.data,
+                payload,
+                label=self.entity_id,
+            )
+        return await async_send_downlink(
             self.hass,
             self._entry,
             self._subentry.data,
             payload,
             label=self.entity_id,
         )
-        if ok:
-            self._attr_is_on = enable
-            self.async_write_ha_state()
+
+
+class Wt101ChildLockSwitch(_Wt101SettingSwitch):
+    """Lock the knob so the target can only be changed remotely.
+
+    While locked, turning the knob on the device does nothing; HA, the
+    setpoint source and the ToolBox app can still change the target.
+    """
+
+    _suffix = "child lock"
+    _unique_suffix = "child_lock"
+    _default_on = False  # factory default: unlocked
+    _attr_icon = "mdi:lock"
+
+    async def _async_send(self, enable: bool) -> bool:
+        return await async_send_downlink(
+            self.hass,
+            self._entry,
+            self._subentry.data,
+            build_child_lock_payload(enable),
+            label=self.entity_id,
+        )
 
 
 class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):

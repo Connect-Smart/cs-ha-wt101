@@ -22,7 +22,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .calibration import is_calibrating
+from .calibration import (
+    async_finish as async_finish_calibration,
+    async_start as async_start_calibration,
+    device_key,
+    is_calibrating,
+)
 from .const import (
     CONF_CS_API_TOKEN,
     CONF_CS_BASE_URL,
@@ -37,6 +42,7 @@ from .const import (
     PLATFORM_CHIRPSTACK,
     PLATFORM_TTN,
 )
+from .setpoint import whole_degrees
 
 _LOGGER = logging.getLogger(__name__)
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10)
@@ -47,7 +53,7 @@ _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10)
 # =====================================================================
 def build_target_temperature_payload(target_c: float, tolerance_c: float) -> bytes:
     """ff b1 + INT8 °C + UINT16LE tolerance×10."""
-    temp_byte = struct.pack("b", int(round(target_c)))
+    temp_byte = struct.pack("b", whole_degrees(target_c))
     tolerance_units = max(0, min(0xFFFF, int(round(tolerance_c * 10))))
     return b"\xff\xb1" + temp_byte + struct.pack("<H", tolerance_units)
 
@@ -64,6 +70,11 @@ def build_temperature_calibration_payload(
 def build_temperature_control_enable_payload(enable: bool) -> bytes:
     """ff b3 + enable(1B)."""
     return b"\xff\xb3" + struct.pack("B", 1 if enable else 0)
+
+
+def build_child_lock_payload(enable: bool) -> bytes:
+    """ff 25 + enable(1B). Locked: the knob no longer changes the target."""
+    return b"\xff\x25" + struct.pack("B", 1 if enable else 0)
 
 
 def build_valve_calibration_payload() -> bytes:
@@ -141,6 +152,36 @@ async def async_send_downlink(
         )
     _LOGGER.error("%s: unknown platform %s", label, platform)
     return False
+
+
+async def async_send_calibration_trigger(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    sub_data: dict[str, Any],
+    payload: bytes,
+    *,
+    label: str = "WT101",
+) -> bool:
+    """Queue a downlink that makes the WT101 calibrate its valve motor.
+
+    That is ``ff ad ff`` and also ``ff b3 01``: the user guide says enabling
+    temperature control starts one motor calibration. Every other downlink
+    is held first, so nothing sneaks in between the queue flush and this
+    one, or reaches the motor mid-run.
+    """
+    async_start_calibration(hass, sub_data)
+    ok = await async_send_downlink(
+        hass,
+        entry,
+        sub_data,
+        payload,
+        label=label,
+        force=True,
+        replace_queue=True,
+    )
+    if not ok:
+        async_finish_calibration(hass, device_key(sub_data), None)
+    return ok
 
 
 async def _send_ttn(

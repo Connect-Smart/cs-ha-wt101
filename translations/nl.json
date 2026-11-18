@@ -142,7 +142,8 @@
       },
       "error": {
         "external_interval_too_long": "Het verzendinterval moet korter zijn dan de timeout van de externe sensor.",
-        "setpoint_sync_needs_writable": "Terugschrijven naar de bron vereist een thermostaat (climate), input_number of number als bron."
+        "setpoint_sync_needs_writable": "Terugschrijven naar de bron vereist een thermostaat (climate), input_number of number als bron.",
+        "min_above_max": "De minimale doeltemperatuur moet lager zijn dan de maximale."
       }
     }
   },
@@ -166,6 +167,9 @@
     "switch": {
       "external_sensor_mode": {
         "name": "Externe sensormodus"
+      },
+      "child_lock": {
+        "name": "Kinderslot"
       }
     },
     "sensor": {
@@ -184,6 +188,26 @@
         "state": {
           "installed": "Gemonteerd",
           "uninstalled": "Gedemonteerd"
+        }
+      },
+      "valve_opening": {
+        "name": "Klepopening"
+      },
+      "battery": {
+        "name": "Batterij"
+      },
+      "window_detection": {
+        "name": "Open raam",
+        "state": {
+          "normal": "Dicht",
+          "open": "Open"
+        }
+      },
+      "freeze_protection": {
+        "name": "Vorstbeveiliging",
+        "state": {
+          "normal": "Normaal",
+          "triggered": "Actief"
         }
       }
     }

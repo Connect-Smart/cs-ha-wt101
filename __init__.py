@@ -46,6 +46,9 @@ _FIELD_KEYS: dict[str, tuple[str, ...]] = {
     ),
     "motor_position": ("motor_position",),
     "motor_stroke": ("motor_stroke", "motor_stroke_size"),
+    # Only reported in valve opening control mode (05 92).
+    "valve_opening": ("valve_opening",),
+    "battery": ("battery", "battery_level"),
 }
 
 # Status fields the codec emits as strings (e.g. "fail: out of range").
@@ -56,6 +59,8 @@ _STATUS_KEYS: dict[str, tuple[str, ...]] = {
         "calibration_result",
     ),
     "tamper_status": ("tamper_status", "tamper"),
+    "window_detection": ("window_detection", "open_window"),
+    "freeze_protection": ("freeze_protection",),
 }
 
 

@@ -97,6 +97,9 @@
       },
       "external_sensor_mode": {
         "name": "External sensor mode"
+      },
+      "child_lock": {
+        "name": "Child lock"
       }
     },
     "sensor": {
@@ -121,6 +124,26 @@
         "state": {
           "installed": "Installed",
           "uninstalled": "Uninstalled"
+        }
+      },
+      "valve_opening": {
+        "name": "Valve opening"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "window_detection": {
+        "name": "Open window",
+        "state": {
+          "normal": "Closed",
+          "open": "Open"
+        }
+      },
+      "freeze_protection": {
+        "name": "Freeze protection",
+        "state": {
+          "normal": "Normal",
+          "triggered": "Triggered"
         }
       }
     }
@@ -220,7 +243,8 @@
       },
       "error": {
         "external_interval_too_long": "The send interval must be shorter than the external sensor timeout.",
-        "setpoint_sync_needs_writable": "Writing back to the source needs a thermostat (climate), input_number or number entity as setpoint source."
+        "setpoint_sync_needs_writable": "Writing back to the source needs a thermostat (climate), input_number or number entity as setpoint source.",
+        "min_above_max": "The minimum target temperature must be below the maximum."
       }
     }
   },

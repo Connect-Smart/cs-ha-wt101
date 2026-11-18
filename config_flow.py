@@ -708,12 +708,12 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                 ),
                 opt_number(CONF_MIN_TEMP, DEFAULT_MIN_TEMP): NumberSelector(
                     NumberSelectorConfig(
-                        min=5, max=35, step=0.5, mode=NumberSelectorMode.BOX
+                        min=5, max=35, step=1, mode=NumberSelectorMode.BOX
                     )
                 ),
                 opt_number(CONF_MAX_TEMP, DEFAULT_MAX_TEMP): NumberSelector(
                     NumberSelectorConfig(
-                        min=5, max=35, step=0.5, mode=NumberSelectorMode.BOX
+                        min=5, max=35, step=1, mode=NumberSelectorMode.BOX
                     )
                 ),
                 opt_number(CONF_TOLERANCE, DEFAULT_TOLERANCE): NumberSelector(
@@ -727,6 +727,10 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
     @staticmethod
     def _validate(user_input: dict[str, Any]) -> dict[str, str]:
         """Cross-field checks for the thermostat form."""
+        if user_input.get(CONF_MIN_TEMP, DEFAULT_MIN_TEMP) >= user_input.get(
+            CONF_MAX_TEMP, DEFAULT_MAX_TEMP
+        ):
+            return {"base": "min_above_max"}
         interval = user_input.get(
             CONF_EXTERNAL_SEND_INTERVAL, DEFAULT_EXTERNAL_SEND_INTERVAL
         )

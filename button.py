@@ -14,12 +14,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_THERMOSTAT,
 )
-from .calibration import (
-    async_finish as async_finish_calibration,
-    async_start as async_start_calibration,
-    device_key,
-)
-from .lorawan import async_send_downlink, build_valve_calibration_payload
+from .lorawan import async_send_calibration_trigger, build_valve_calibration_payload
 
 
 async def async_setup_entry(
@@ -73,18 +68,10 @@ class Wt101CalibrateValveButton(ButtonEntity):
         )
 
     async def async_press(self) -> None:
-        sub_data = self._subentry.data
-        # Hold every other downlink first so nothing sneaks in between the
-        # queue flush and the calibration, or reaches the motor mid-run.
-        async_start_calibration(self.hass, sub_data)
-        ok = await async_send_downlink(
+        await async_send_calibration_trigger(
             self.hass,
             self._entry,
-            sub_data,
+            self._subentry.data,
             build_valve_calibration_payload(),
             label=self.entity_id,
-            force=True,
-            replace_queue=True,
         )
-        if not ok:
-            async_finish_calibration(self.hass, device_key(sub_data), None)
