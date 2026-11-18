@@ -1,12 +1,12 @@
 {
   "domain": "wt101_climate",
   "name": "Milesight WT101 Climate",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "config_flow": true,
   "iot_class": "local_push",
   "integration_type": "device",
-  "documentation": "https://github.com/Milesight-IoT/SensorDecoders",
-  "issue_tracker": "https://github.com/Milesight-IoT/SensorDecoders/issues",
+  "documentation": "https://github.com/Connect-Smart/cs-ha-wt101",
+  "issue_tracker": "https://github.com/Connect-Smart/cs-ha-wt101/issues",
   "codeowners": [],
   "dependencies": ["webhook"],
   "requirements": []
