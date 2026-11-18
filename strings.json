@@ -100,6 +100,12 @@
       },
       "child_lock": {
         "name": "Child lock"
+      },
+      "open_window_detection": {
+        "name": "Open window detection"
+      },
+      "freeze_protection": {
+        "name": "Freeze protection"
       }
     },
     "sensor": {
@@ -174,7 +180,11 @@
             "external_offline_mode": "External sensor: when readings stop arriving",
             "setpoint_source": "Follow target temperature from (thermostat/helper, optional)",
             "setpoint_priority": "Setpoint: when the knob is turned",
-            "setpoint_grace": "Setpoint: max wait for confirmation (min)"
+            "setpoint_grace": "Setpoint: max wait for confirmation (min)",
+            "window_cooling_rate": "Open window: cooling rate (°C/min)",
+            "window_stop_time": "Open window: resume heating after (min)",
+            "window_valve_strategy": "Open window: valve while heating is paused",
+            "freeze_threshold": "Freeze protection: threshold (°C)"
           },
           "data_description": {
             "external_temp_sensor": "Any numeric sensor in °C (°F is converted). Only used while the \"… external sensor mode\" switch is on: the WT101 then regulates the valve on this temperature instead of its built-in sensor.",
@@ -185,7 +195,10 @@
             "setpoint_priority": "What happens when someone changes the target on the knob itself. After a restart or reconfigure the knob always first gets the source value.",
             "setpoint_grace": "How long HA waits for an uplink confirming a new target before retrying. About 2× the WT101 reporting interval plus a margin. ChirpStack hubs with the webhook confirm after 2 uplinks already.",
             "current_temp_sensor": "Only for TTN or other integrations: the sensor holding the temperature the WT101 itself reports. Leave empty for ChirpStack with the webhook.",
-            "target_temp_sensor": "Not for picking a thermostat — use \"Follow target temperature from\" for that. This is the sensor holding the target the WT101 itself reports (e.g. from TTN). Leave empty for ChirpStack with the webhook."
+            "target_temp_sensor": "Not for picking a thermostat — use \"Follow target temperature from\" for that. This is the sensor holding the target the WT101 itself reports (e.g. from TTN). Leave empty for ChirpStack with the webhook.",
+            "window_cooling_rate": "Used while the \"… open window detection\" switch is on: a temperature drop faster than this counts as an open window and heating pauses. Heating resumes when the temperature rises for 10 minutes or reaches the target.",
+            "window_stop_time": "Heating resumes after this time even if the window still seems open.",
+            "freeze_threshold": "Used while the \"… freeze protection\" switch is on: below this temperature the WT101 opens the valve to heat back up to it."
           }
         },
         "device": {
@@ -223,7 +236,11 @@
             "external_offline_mode": "External sensor: when readings stop arriving",
             "setpoint_source": "Follow target temperature from (thermostat/helper, optional)",
             "setpoint_priority": "Setpoint: when the knob is turned",
-            "setpoint_grace": "Setpoint: max wait for confirmation (min)"
+            "setpoint_grace": "Setpoint: max wait for confirmation (min)",
+            "window_cooling_rate": "Open window: cooling rate (°C/min)",
+            "window_stop_time": "Open window: resume heating after (min)",
+            "window_valve_strategy": "Open window: valve while heating is paused",
+            "freeze_threshold": "Freeze protection: threshold (°C)"
           },
           "data_description": {
             "external_temp_sensor": "Any numeric sensor in °C (°F is converted). Only used while the \"… external sensor mode\" switch is on: the WT101 then regulates the valve on this temperature instead of its built-in sensor.",
@@ -234,7 +251,10 @@
             "setpoint_priority": "What happens when someone changes the target on the knob itself. After a restart or reconfigure the knob always first gets the source value.",
             "setpoint_grace": "How long HA waits for an uplink confirming a new target before retrying. About 2× the WT101 reporting interval plus a margin. ChirpStack hubs with the webhook confirm after 2 uplinks already.",
             "current_temp_sensor": "Only for TTN or other integrations: the sensor holding the temperature the WT101 itself reports. Leave empty for ChirpStack with the webhook.",
-            "target_temp_sensor": "Not for picking a thermostat — use \"Follow target temperature from\" for that. This is the sensor holding the target the WT101 itself reports (e.g. from TTN). Leave empty for ChirpStack with the webhook."
+            "target_temp_sensor": "Not for picking a thermostat — use \"Follow target temperature from\" for that. This is the sensor holding the target the WT101 itself reports (e.g. from TTN). Leave empty for ChirpStack with the webhook.",
+            "window_cooling_rate": "Used while the \"… open window detection\" switch is on: a temperature drop faster than this counts as an open window and heating pauses. Heating resumes when the temperature rises for 10 minutes or reaches the target.",
+            "window_stop_time": "Heating resumes after this time even if the window still seems open.",
+            "freeze_threshold": "Used while the \"… freeze protection\" switch is on: below this temperature the WT101 opens the valve to heat back up to it."
           }
         }
       },
@@ -261,6 +281,12 @@
         "device": "Knob wins until the source changes again",
         "source": "Source wins, knob changes are reverted",
         "sync": "Write the knob value back to the source (thermostat/input_number/number)"
+      }
+    },
+    "window_valve_strategy": {
+      "options": {
+        "keep": "Keep the current valve position",
+        "close": "Close the valve"
       }
     }
   }

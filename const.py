@@ -45,6 +45,18 @@ CONF_EXTERNAL_TIMEOUT = "external_timeout"
 CONF_EXTERNAL_SEND_INTERVAL = "external_send_interval"
 CONF_EXTERNAL_OFFLINE_MODE = "external_offline_mode"
 
+# Open window detection (ff af + f9 37) and freeze protection (ff b0).
+CONF_WINDOW_COOLING_RATE = "window_cooling_rate"
+CONF_WINDOW_STOP_TIME = "window_stop_time"
+CONF_WINDOW_VALVE_STRATEGY = "window_valve_strategy"
+CONF_FREEZE_THRESHOLD = "freeze_threshold"
+
+# What the valve does while an open window pauses heating (f9 37 byte).
+WINDOW_VALVE_STRATEGIES: dict[str, int] = {
+    "keep": 0,
+    "close": 1,
+}
+
 # Setpoint source: an HA entity that dictates the WT101 target temperature.
 CONF_SETPOINT_SOURCE = "setpoint_source"
 CONF_SETPOINT_PRIORITY = "setpoint_priority"
@@ -87,6 +99,10 @@ DEFAULT_TOLERANCE = 0.5
 DEFAULT_EXTERNAL_TIMEOUT = 60  # minutes, device accepts 3–60
 DEFAULT_EXTERNAL_SEND_INTERVAL = 10  # minutes, matches default report interval
 DEFAULT_EXTERNAL_OFFLINE_MODE = "internal"
+DEFAULT_WINDOW_COOLING_RATE = 2.0  # °C/min, INT8/10 on the wire (max 12.7)
+DEFAULT_WINDOW_STOP_TIME = 60  # minutes
+DEFAULT_WINDOW_VALVE_STRATEGY = "keep"  # device default
+DEFAULT_FREEZE_THRESHOLD = 5.0  # °C
 DEFAULT_SETPOINT_PRIORITY = PRIORITY_DEVICE
 DEFAULT_SETPOINT_GRACE = 25  # minutes, ~2 report intervals + margin
 DEFAULT_TTN_BASE_URL = "https://eu1.cloud.thethings.network"

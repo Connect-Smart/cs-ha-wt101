@@ -26,6 +26,7 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .calibration import (
     STATE_DONE,
+    STATE_STARTED,
     calibration_signal,
     device_key,
     is_calibrating,
@@ -37,15 +38,24 @@ from .const import (
     CONF_EXTERNAL_SEND_INTERVAL,
     CONF_EXTERNAL_TEMP_SENSOR,
     CONF_EXTERNAL_TIMEOUT,
+    CONF_FREEZE_THRESHOLD,
     CONF_PLATFORM_TYPE,
     CONF_TTN_DEVICE_ID,
+    CONF_WINDOW_COOLING_RATE,
+    CONF_WINDOW_STOP_TIME,
+    CONF_WINDOW_VALVE_STRATEGY,
     DEFAULT_EXTERNAL_OFFLINE_MODE,
     DEFAULT_EXTERNAL_SEND_INTERVAL,
     DEFAULT_EXTERNAL_TIMEOUT,
+    DEFAULT_FREEZE_THRESHOLD,
+    DEFAULT_WINDOW_COOLING_RATE,
+    DEFAULT_WINDOW_STOP_TIME,
+    DEFAULT_WINDOW_VALVE_STRATEGY,
     DOMAIN,
     EXTERNAL_OFFLINE_MODES,
     PLATFORM_CHIRPSTACK,
     SUBENTRY_TYPE_THERMOSTAT,
+    WINDOW_VALVE_STRATEGIES,
     cs_uplink_signal,
 )
 from .lorawan import (
@@ -55,6 +65,8 @@ from .lorawan import (
     build_external_offline_mode_payload,
     build_external_sensor_mode_payload,
     build_external_temperature_payload,
+    build_freeze_protection_payload,
+    build_open_window_payload,
     build_temperature_control_enable_payload,
 )
 
@@ -62,6 +74,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Skip an uplink-triggered push if we already queued one this recently.
 _UPLINK_DEDUPE = timedelta(seconds=60)
+# A setting queued this recently before a calibration may still have been
+# waiting in the queue the calibration flushed; it is sent again afterwards.
+_RESEND_WINDOW = timedelta(minutes=30)
 
 
 async def async_setup_entry(
@@ -82,6 +97,8 @@ async def async_setup_entry(
             [
                 Wt101TemperatureControlSwitch(entry, subentry),
                 Wt101ChildLockSwitch(entry, subentry),
+                Wt101OpenWindowSwitch(entry, subentry),
+                Wt101FreezeProtectionSwitch(entry, subentry),
                 Wt101ExternalSensorSwitch(entry, subentry),
             ],
             config_subentry_id=subentry.subentry_id,
@@ -95,7 +112,9 @@ class _Wt101SettingSwitch(SwitchEntity, RestoreEntity):
     """One on/off device setting, written with a single downlink.
 
     The WT101 does not report these settings back, so the state is the last
-    value HA queued successfully (restored across restarts).
+    value HA queued successfully (restored across restarts). Settings that
+    come with parameters from the thermostat form are shown as attributes
+    and sent again when they are changed while the switch is on.
     """
 
     _attr_should_poll = False
@@ -105,6 +124,9 @@ class _Wt101SettingSwitch(SwitchEntity, RestoreEntity):
     _suffix: str = ""
     _unique_suffix: str = ""
     _default_on: bool = False
+    # Re-send after a calibration flushed the queue. Off where re-sending
+    # has side effects (enabling temperature control starts a calibration).
+    _resend_after_calibration: bool = True
 
     def __init__(self, entry: ConfigEntry, subentry: ConfigSubentry) -> None:
         self._entry = entry
@@ -114,6 +136,9 @@ class _Wt101SettingSwitch(SwitchEntity, RestoreEntity):
         self._attr_name = f"{sub_data[CONF_NAME]} {self._suffix}"
         self._attr_unique_id = f"{subentry.subentry_id}_{self._unique_suffix}"
         self._attr_is_on = self._default_on
+        self._sent_settings: dict[str, Any] = {}
+        self._sent_at: datetime | None = None
+        self._resend_pending = False
 
         identifier = (
             sub_data.get(CONF_TTN_DEVICE_ID)
@@ -127,11 +152,34 @@ class _Wt101SettingSwitch(SwitchEntity, RestoreEntity):
             model="WT101",
         )
 
+    def _settings(self) -> dict[str, Any]:
+        """Parameters sent along with ``on`` (from the thermostat form)."""
+        return {}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        return self._sent_settings or None
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last is not None and last.state in ("on", "off"):
             self._attr_is_on = last.state == "on"
+            self._sent_settings = {
+                key: last.attributes[key]
+                for key in self._settings()
+                if key in last.attributes
+            }
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                calibration_signal(device_key(self._subentry.data)),
+                self._handle_calibration,
+            )
+        )
+        if self._attr_is_on and self._sent_settings != self._settings():
+            # Reconfigured while on: push the new parameters.
+            self.hass.async_create_task(self._async_resend())
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set(True)
@@ -142,11 +190,47 @@ class _Wt101SettingSwitch(SwitchEntity, RestoreEntity):
     async def _set(self, enable: bool) -> None:
         raise_if_calibrating(self.hass, self._subentry.data)
         if await self._async_send(enable):
-            self._attr_is_on = enable
-            self.async_write_ha_state()
+            self._record_sent(enable)
+
+    async def _async_resend(self) -> None:
+        """Send the current state again without user interaction."""
+        if is_calibrating(self.hass, self._subentry.data):
+            self._resend_pending = True  # sent once the calibration ends
+            return
+        if await self._async_send(self._attr_is_on):
+            self._record_sent(self._attr_is_on)
+
+    @callback
+    def _record_sent(self, enable: bool) -> None:
+        self._attr_is_on = enable
+        self._sent_settings = self._settings()
+        self._sent_at = dt_util.utcnow()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_calibration(self, event: dict[str, Any]) -> None:
+        if event["state"] == STATE_STARTED:
+            if (
+                self._resend_after_calibration
+                and self._sent_at is not None
+                and dt_util.utcnow() - self._sent_at < _RESEND_WINDOW
+            ):
+                self._resend_pending = True
+        elif event["state"] == STATE_DONE and self._resend_pending:
+            self._resend_pending = False
+            self.hass.async_create_task(self._async_resend())
 
     async def _async_send(self, enable: bool) -> bool:
         raise NotImplementedError
+
+    async def _async_downlink(self, payload: bytes) -> bool:
+        return await async_send_downlink(
+            self.hass,
+            self._entry,
+            self._subentry.data,
+            payload,
+            label=self.entity_id,
+        )
 
 
 class Wt101TemperatureControlSwitch(_Wt101SettingSwitch):
@@ -155,6 +239,7 @@ class Wt101TemperatureControlSwitch(_Wt101SettingSwitch):
     _suffix = "temperature control"
     _unique_suffix = "temp_control"
     _default_on = True
+    _resend_after_calibration = False
     _attr_icon = "mdi:thermostat-cog"
 
     async def _async_send(self, enable: bool) -> bool:
@@ -169,13 +254,7 @@ class Wt101TemperatureControlSwitch(_Wt101SettingSwitch):
                 payload,
                 label=self.entity_id,
             )
-        return await async_send_downlink(
-            self.hass,
-            self._entry,
-            self._subentry.data,
-            payload,
-            label=self.entity_id,
-        )
+        return await self._async_downlink(payload)
 
 
 class Wt101ChildLockSwitch(_Wt101SettingSwitch):
@@ -191,12 +270,73 @@ class Wt101ChildLockSwitch(_Wt101SettingSwitch):
     _attr_icon = "mdi:lock"
 
     async def _async_send(self, enable: bool) -> bool:
-        return await async_send_downlink(
-            self.hass,
-            self._entry,
-            self._subentry.data,
-            build_child_lock_payload(enable),
-            label=self.entity_id,
+        return await self._async_downlink(build_child_lock_payload(enable))
+
+
+class Wt101OpenWindowSwitch(_Wt101SettingSwitch):
+    """Open window detection (ff af + f9 37).
+
+    When the temperature drops faster than the cooling rate the WT101 stops
+    regulating and reports ``open`` (see the open window sensor). It resumes
+    when the temperature rises for 10 minutes, reaches the target, or after
+    the stop time.
+    """
+
+    _suffix = "open window detection"
+    _unique_suffix = "open_window_detection"
+    _attr_icon = "mdi:window-open-variant"
+
+    def _settings(self) -> dict[str, Any]:
+        sub_data = self._subentry.data
+        return {
+            CONF_WINDOW_COOLING_RATE: float(
+                sub_data.get(CONF_WINDOW_COOLING_RATE, DEFAULT_WINDOW_COOLING_RATE)
+            ),
+            CONF_WINDOW_STOP_TIME: int(
+                sub_data.get(CONF_WINDOW_STOP_TIME, DEFAULT_WINDOW_STOP_TIME)
+            ),
+            CONF_WINDOW_VALVE_STRATEGY: sub_data.get(
+                CONF_WINDOW_VALVE_STRATEGY, DEFAULT_WINDOW_VALVE_STRATEGY
+            ),
+        }
+
+    async def _async_send(self, enable: bool) -> bool:
+        settings = self._settings()
+        return await self._async_downlink(
+            build_open_window_payload(
+                enable,
+                settings[CONF_WINDOW_COOLING_RATE],
+                settings[CONF_WINDOW_STOP_TIME],
+                WINDOW_VALVE_STRATEGIES.get(settings[CONF_WINDOW_VALVE_STRATEGY], 0),
+            )
+        )
+
+
+class Wt101FreezeProtectionSwitch(_Wt101SettingSwitch):
+    """Freeze protection (ff b0).
+
+    Below the threshold the WT101 opens the valve to heat back up to the
+    threshold (± tolerance), checked every 10 minutes.
+    """
+
+    _suffix = "freeze protection"
+    _unique_suffix = "freeze_protection"
+    _attr_icon = "mdi:snowflake-thermometer"
+
+    def _settings(self) -> dict[str, Any]:
+        return {
+            CONF_FREEZE_THRESHOLD: float(
+                self._subentry.data.get(
+                    CONF_FREEZE_THRESHOLD, DEFAULT_FREEZE_THRESHOLD
+                )
+            )
+        }
+
+    async def _async_send(self, enable: bool) -> bool:
+        return await self._async_downlink(
+            build_freeze_protection_payload(
+                enable, self._settings()[CONF_FREEZE_THRESHOLD]
+            )
         )
 
 

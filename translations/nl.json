@@ -73,7 +73,11 @@
             "external_offline_mode": "Externe sensor: als metingen uitblijven",
             "setpoint_source": "Doeltemperatuur volgen van (thermostaat/helper, optioneel)",
             "setpoint_priority": "Doeltemperatuur: als aan de knop gedraaid wordt",
-            "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)"
+            "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)",
+            "window_cooling_rate": "Open raam: afkoelsnelheid (°C/min)",
+            "window_stop_time": "Open raam: weer verwarmen na (min)",
+            "window_valve_strategy": "Open raam: klep tijdens de pauze",
+            "freeze_threshold": "Vorstbeveiliging: drempel (°C)"
           },
           "data_description": {
             "external_temp_sensor": "Elke numerieke sensor in °C (°F wordt omgerekend). Wordt alleen gebruikt als de schakelaar \"… external sensor mode\" aan staat: de WT101 regelt de klep dan op deze temperatuur in plaats van op zijn eigen sensor.",
@@ -84,7 +88,10 @@
             "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert. Na een herstart of herconfiguratie krijgt de knop altijd eerst de waarde van de bron.",
             "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks.",
             "current_temp_sensor": "Alleen voor TTN of andere integraties: de sensor met de temperatuur die de WT101 zelf meldt. Leeg laten bij ChirpStack met webhook.",
-            "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook."
+            "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook.",
+            "window_cooling_rate": "Gebruikt zolang de switch \"… open window detection\" aan staat: daalt de temperatuur sneller dan dit, dan geldt dat als open raam en pauzeert het verwarmen. Het verwarmen gaat verder als de temperatuur 10 minuten stijgt of het doel bereikt.",
+            "window_stop_time": "Na deze tijd wordt weer verwarmd, ook als het raam nog open lijkt.",
+            "freeze_threshold": "Gebruikt zolang de switch \"… freeze protection\" aan staat: onder deze temperatuur opent de WT101 de klep om weer tot deze temperatuur te verwarmen."
           }
         },
         "device": {
@@ -122,7 +129,11 @@
             "external_offline_mode": "Externe sensor: als metingen uitblijven",
             "setpoint_source": "Doeltemperatuur volgen van (thermostaat/helper, optioneel)",
             "setpoint_priority": "Doeltemperatuur: als aan de knop gedraaid wordt",
-            "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)"
+            "setpoint_grace": "Doeltemperatuur: max wachttijd op bevestiging (min)",
+            "window_cooling_rate": "Open raam: afkoelsnelheid (°C/min)",
+            "window_stop_time": "Open raam: weer verwarmen na (min)",
+            "window_valve_strategy": "Open raam: klep tijdens de pauze",
+            "freeze_threshold": "Vorstbeveiliging: drempel (°C)"
           },
           "data_description": {
             "external_temp_sensor": "Elke numerieke sensor in °C (°F wordt omgerekend). Wordt alleen gebruikt als de schakelaar \"… external sensor mode\" aan staat: de WT101 regelt de klep dan op deze temperatuur in plaats van op zijn eigen sensor.",
@@ -133,7 +144,10 @@
             "setpoint_priority": "Wat er gebeurt als iemand de doeltemperatuur op de knop zelf verandert. Na een herstart of herconfiguratie krijgt de knop altijd eerst de waarde van de bron.",
             "setpoint_grace": "Hoe lang HA wacht op een uplink die een nieuwe doeltemperatuur bevestigt voordat het opnieuw verstuurt. Ongeveer 2× het rapportage-interval van de WT101 plus marge. ChirpStack-hubs met webhook bevestigen al na 2 uplinks.",
             "current_temp_sensor": "Alleen voor TTN of andere integraties: de sensor met de temperatuur die de WT101 zelf meldt. Leeg laten bij ChirpStack met webhook.",
-            "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook."
+            "target_temp_sensor": "Niet voor het kiezen van een thermostaat — gebruik daarvoor \"Doeltemperatuur volgen van\". Dit is de sensor met de doeltemperatuur die de WT101 zelf meldt (bijv. via TTN). Leeg laten bij ChirpStack met webhook.",
+            "window_cooling_rate": "Gebruikt zolang de switch \"… open window detection\" aan staat: daalt de temperatuur sneller dan dit, dan geldt dat als open raam en pauzeert het verwarmen. Het verwarmen gaat verder als de temperatuur 10 minuten stijgt of het doel bereikt.",
+            "window_stop_time": "Na deze tijd wordt weer verwarmd, ook als het raam nog open lijkt.",
+            "freeze_threshold": "Gebruikt zolang de switch \"… freeze protection\" aan staat: onder deze temperatuur opent de WT101 de klep om weer tot deze temperatuur te verwarmen."
           }
         }
       },
@@ -161,6 +175,12 @@
         "source": "Bron wint, knopwijzigingen worden teruggezet",
         "sync": "Knopwaarde terugschrijven naar de bron (thermostaat/input_number/number)"
       }
+    },
+    "window_valve_strategy": {
+      "options": {
+        "keep": "Huidige klepstand vasthouden",
+        "close": "Klep sluiten"
+      }
     }
   },
   "entity": {
@@ -170,6 +190,12 @@
       },
       "child_lock": {
         "name": "Kinderslot"
+      },
+      "open_window_detection": {
+        "name": "Open-raamdetectie"
+      },
+      "freeze_protection": {
+        "name": "Vorstbeveiliging"
       }
     },
     "sensor": {

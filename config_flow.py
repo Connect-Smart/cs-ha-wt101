@@ -55,6 +55,7 @@ from .const import (
     CONF_EXTERNAL_TEMP_SENSOR,
     CONF_EXTERNAL_TIMEOUT,
     CONF_FPORT,
+    CONF_FREEZE_THRESHOLD,
     CONF_MAX_TEMP,
     CONF_MIN_TEMP,
     CONF_MOTOR_POSITION_SENSOR,
@@ -69,17 +70,24 @@ from .const import (
     CONF_TTN_APPLICATION_ID,
     CONF_TTN_BASE_URL,
     CONF_TTN_DEVICE_ID,
+    CONF_WINDOW_COOLING_RATE,
+    CONF_WINDOW_STOP_TIME,
+    CONF_WINDOW_VALVE_STRATEGY,
     DEFAULT_CS_BASE_URL,
     DEFAULT_EXTERNAL_OFFLINE_MODE,
     DEFAULT_EXTERNAL_SEND_INTERVAL,
     DEFAULT_EXTERNAL_TIMEOUT,
     DEFAULT_FPORT,
+    DEFAULT_FREEZE_THRESHOLD,
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
     DEFAULT_SETPOINT_GRACE,
     DEFAULT_SETPOINT_PRIORITY,
     DEFAULT_TOLERANCE,
     DEFAULT_TTN_BASE_URL,
+    DEFAULT_WINDOW_COOLING_RATE,
+    DEFAULT_WINDOW_STOP_TIME,
+    DEFAULT_WINDOW_VALVE_STRATEGY,
     DOMAIN,
     EXTERNAL_OFFLINE_MODES,
     PLATFORM_CHIRPSTACK,
@@ -87,6 +95,7 @@ from .const import (
     PRIORITY_SYNC,
     SETPOINT_PRIORITIES,
     SUBENTRY_TYPE_THERMOSTAT,
+    WINDOW_VALVE_STRATEGIES,
     WRITABLE_SETPOINT_DOMAINS,
     WT101_BRAND_KEYS,
     WT101_MODEL_KEYS,
@@ -693,6 +702,37 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
                         options=list(EXTERNAL_OFFLINE_MODES),
                         mode=SelectSelectorMode.DROPDOWN,
                         translation_key=CONF_EXTERNAL_OFFLINE_MODE,
+                    )
+                ),
+                # Used by the "open window detection" / "freeze protection"
+                # switches; changing them while a switch is on resends it.
+                opt_number(
+                    CONF_WINDOW_COOLING_RATE, DEFAULT_WINDOW_COOLING_RATE
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0.1, max=12.7, step=0.1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                opt_number(CONF_WINDOW_STOP_TIME, DEFAULT_WINDOW_STOP_TIME): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1, max=1440, step=1, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    CONF_WINDOW_VALVE_STRATEGY,
+                    default=cur.get(
+                        CONF_WINDOW_VALVE_STRATEGY, DEFAULT_WINDOW_VALVE_STRATEGY
+                    ),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(WINDOW_VALVE_STRATEGIES),
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_WINDOW_VALVE_STRATEGY,
+                    )
+                ),
+                opt_number(CONF_FREEZE_THRESHOLD, DEFAULT_FREEZE_THRESHOLD): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1, max=15, step=0.5, mode=NumberSelectorMode.BOX
                     )
                 ),
                 **{

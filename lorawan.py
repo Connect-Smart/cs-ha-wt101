@@ -77,6 +77,27 @@ def build_child_lock_payload(enable: bool) -> bytes:
     return b"\xff\x25" + struct.pack("B", 1 if enable else 0)
 
 
+def build_open_window_payload(
+    enable: bool, cooling_rate_c: float, stop_minutes: int, valve_strategy: int
+) -> bytes:
+    """ff af + enable + INT8 cooling rate×10 (°C/min) + UINT16LE stop time
+    (min), followed by f9 37 + valve strategy (00 keep, 01 close)."""
+    rate = max(1, min(127, int(round(cooling_rate_c * 10))))
+    stop = max(1, min(0xFFFF, int(stop_minutes)))
+    return (
+        b"\xff\xaf"
+        + struct.pack("<BbH", 1 if enable else 0, rate, stop)
+        + b"\xf9\x37"
+        + struct.pack("B", valve_strategy)
+    )
+
+
+def build_freeze_protection_payload(enable: bool, threshold_c: float) -> bytes:
+    """ff b0 + enable + INT16LE threshold×10 (°C)."""
+    value = max(-32768, min(32767, int(round(threshold_c * 10))))
+    return b"\xff\xb0" + struct.pack("<Bh", 1 if enable else 0, value)
+
+
 def build_valve_calibration_payload() -> bytes:
     """ff ad ff — single-shot mechanical valve recalibration."""
     return b"\xff\xad\xff"
