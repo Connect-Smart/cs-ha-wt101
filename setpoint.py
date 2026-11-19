@@ -104,7 +104,7 @@ class SetpointArbiter:
         self._clear_pending()
 
     def on_uplink(self) -> None:
-        """Any uplink from the device arrived (ChirpStack webhook only)."""
+        """Any uplink from the device arrived."""
         if self.pending is not None:
             self._uplinks += 1
 

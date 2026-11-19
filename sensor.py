@@ -10,9 +10,9 @@ Each sensor mirrors data from one of two sources:
 Both sources are optional; the entity simply stays unknown until data arrives
 on either path.
 
-Battery, calibration result, tamper, open window and freeze protection only
-exist on the ChirpStack path; the codec emits the statuses as strings, which
-are normalised to ENUM options here.
+Battery, calibration result, tamper, open window and freeze protection come
+from uplinks only (ChirpStack webhook or TTN storage poll); statuses arrive as
+strings or numeric codes and are normalised to ENUM options here.
 """
 from __future__ import annotations
 
@@ -40,16 +40,15 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
+from .calibration import device_key
 from .const import (
     CONF_CS_DEV_EUI,
     CONF_MOTOR_POSITION_SENSOR,
     CONF_MOTOR_STROKE_SENSOR,
-    CONF_PLATFORM_TYPE,
     CONF_TTN_DEVICE_ID,
     DOMAIN,
-    PLATFORM_CHIRPSTACK,
     SUBENTRY_TYPE_THERMOSTAT,
-    cs_uplink_signal,
+    uplink_signal,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,15 +73,14 @@ async def async_setup_entry(
             Wt101MotorPositionSensor(entry, subentry),
             Wt101MotorStrokeSensor(entry, subentry),
         ]
-        if entry.data.get(CONF_PLATFORM_TYPE) == PLATFORM_CHIRPSTACK:
-            # Only the webhook delivers these; on TTN they would stay unknown.
-            entities += [
-                Wt101BatterySensor(entry, subentry),
-                Wt101WindowSensor(entry, subentry),
-                Wt101FreezeProtectionSensor(entry, subentry),
-                Wt101CalibrationResultSensor(entry, subentry),
-                Wt101TamperStatusSensor(entry, subentry),
-            ]
+        # Fed by uplinks: the ChirpStack webhook or the TTN storage poll.
+        entities += [
+            Wt101BatterySensor(entry, subentry),
+            Wt101WindowSensor(entry, subentry),
+            Wt101FreezeProtectionSensor(entry, subentry),
+            Wt101CalibrationResultSensor(entry, subentry),
+            Wt101TamperStatusSensor(entry, subentry),
+        ]
         async_add_entities(entities, config_subentry_id=subentry.subentry_id)
 
     for subentry in entry.subentries.values():
@@ -151,16 +149,15 @@ class _Wt101MirrorSensor(SensorEntity):
                 )
             )
 
-        if self._entry.data.get(CONF_PLATFORM_TYPE) == PLATFORM_CHIRPSTACK:
-            dev_eui = self._subentry.data.get(CONF_CS_DEV_EUI)
-            if dev_eui:
-                self.async_on_remove(
-                    async_dispatcher_connect(
-                        self.hass,
-                        cs_uplink_signal(self._entry.entry_id, dev_eui),
-                        self._handle_uplink,
-                    )
+        key = device_key(self._subentry.data)
+        if key:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    uplink_signal(self._entry.entry_id, key),
+                    self._handle_uplink,
                 )
+            )
 
     @callback
     def _handle_source_change(self, event: Event) -> None:
@@ -265,16 +262,15 @@ class Wt101ValveOpeningSensor(SensorEntity):
                 )
             )
 
-        if self._entry.data.get(CONF_PLATFORM_TYPE) == PLATFORM_CHIRPSTACK:
-            dev_eui = self._subentry.data.get(CONF_CS_DEV_EUI)
-            if dev_eui:
-                self.async_on_remove(
-                    async_dispatcher_connect(
-                        self.hass,
-                        cs_uplink_signal(self._entry.entry_id, dev_eui),
-                        self._handle_uplink,
-                    )
+        key = device_key(self._subentry.data)
+        if key:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    uplink_signal(self._entry.entry_id, key),
+                    self._handle_uplink,
                 )
+            )
 
     def _derive(self) -> float | None:
         if self._position is None or not self._stroke:
@@ -442,12 +438,12 @@ class _Wt101UplinkEnumSensor(SensorEntity, RestoreEntity):
             self._raw_value = last.attributes.get("raw_value")
             self._reported_at = last.attributes.get("reported_at")
 
-        dev_eui = self._subentry.data.get(CONF_CS_DEV_EUI)
-        if dev_eui:
+        key = device_key(self._subentry.data)
+        if key:
             self.async_on_remove(
                 async_dispatcher_connect(
                     self.hass,
-                    cs_uplink_signal(self._entry.entry_id, dev_eui),
+                    uplink_signal(self._entry.entry_id, key),
                     self._handle_uplink,
                 )
             )
@@ -469,7 +465,10 @@ class _Wt101UplinkEnumSensor(SensorEntity, RestoreEntity):
             return
         self._attr_native_value = value
         self._raw_value = raw
-        self._reported_at = dt_util.utcnow().isoformat()
+        times = fields.get("received_at")
+        self._reported_at = (
+            times.get(self._uplink_field) if isinstance(times, dict) else None
+        ) or dt_util.utcnow().isoformat()
         self.async_write_ha_state()
 
 

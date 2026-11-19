@@ -13,8 +13,8 @@ While a calibration is in progress for a device:
 - automatic senders (setpoint arbiter, external temperature pushes) skip
   and resync once the calibration is done.
 
-It ends when the device reports a calibration result (ChirpStack webhook) or
-after ``CALIBRATION_TIMEOUT`` (TTN has no result path here).
+It ends when the device reports a calibration result (ChirpStack webhook or
+TTN storage poll) or after ``CALIBRATION_TIMEOUT``.
 """
 from __future__ import annotations
 

@@ -22,9 +22,13 @@ CONF_CS_WEBHOOK_ID = "cs_webhook_id"
 CONF_CS_WEBHOOK_URL_OVERRIDE = "cs_webhook_url_override"
 
 
-def cs_uplink_signal(entry_id: str, dev_eui: str) -> str:
-    """Dispatcher signal for a single ChirpStack device's uplink updates."""
-    return f"{DOMAIN}_cs_uplink_{entry_id}_{dev_eui.lower()}"
+def uplink_signal(entry_id: str, device: str) -> str:
+    """Dispatcher signal for one device's decoded uplinks.
+
+    ``device`` is the ChirpStack DevEUI or the TTN device ID (see
+    ``calibration.device_key``).
+    """
+    return f"{DOMAIN}_uplink_{entry_id}_{device.lower()}"
 
 # Subentry-level (per thermostat) keys.
 CONF_CURRENT_TEMP_SENSOR = "current_temp_sensor"

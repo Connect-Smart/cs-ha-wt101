@@ -3,6 +3,9 @@
 A config entry == one TTN/ChirpStack application (the "hub"). Each thermostat
 is a ConfigSubentry under that hub, so credentials are shared across all
 thermostats in the same application.
+
+Uplinks reach the entities through one dispatcher signal per device, fed by
+the ChirpStack webhook or, for TTN hubs, by polling TTN's storage (ttn.py).
 """
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ from aiohttp.web import Request, Response
 
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .calibration import async_finish as async_finish_calibration
@@ -23,8 +26,10 @@ from .const import (
     DOMAIN,
     PLATFORMS,
     PLATFORM_CHIRPSTACK,
-    cs_uplink_signal,
+    PLATFORM_TTN,
+    uplink_signal,
 )
+from .ttn import TtnUplinkPoller
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +81,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _register_chirpstack_webhook(hass, entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    if entry.data.get(CONF_PLATFORM_TYPE) == PLATFORM_TTN:
+
+        @callback
+        def _dispatch(device_id: str, obj: dict, times: dict) -> None:
+            async_dispatch_uplink(hass, entry, device_id, obj, times)
+
+        poller = TtnUplinkPoller(hass, entry, _dispatch)
+        poller.async_start()
+        entry.async_on_unload(poller.async_stop)
 
     # When subentries are added or removed the hub entry is updated;
     # reload so the climate platform picks up the new entity set.
@@ -156,7 +171,30 @@ async def _handle_chirpstack_uplink(
         )
         return
 
-    extracted: dict[str, float | str] = {}
+    received_at = body.get("time")
+    async_dispatch_uplink(
+        hass,
+        entry,
+        dev_eui,
+        obj,
+        {key: received_at for key in obj} if isinstance(received_at, str) else None,
+    )
+
+
+@callback
+def async_dispatch_uplink(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    device: str,
+    obj: dict[str, Any],
+    times: dict[str, str] | None = None,
+) -> None:
+    """Pick the known fields from a decoded uplink and fan out to entities.
+
+    ``device`` is the ChirpStack DevEUI or TTN device ID; ``times`` maps each
+    decoder key to when it was received (used for the status sensors).
+    """
+    extracted: dict[str, Any] = {}
     for field, candidates in _FIELD_KEYS.items():
         value = _pick_numeric(obj, candidates)
         if value is not None:
@@ -168,21 +206,26 @@ async def _handle_chirpstack_uplink(
 
     if not extracted:
         _LOGGER.debug(
-            "ChirpStack uplink for %s carried no recognised fields "
-            "(object keys: %s)",
-            dev_eui,
+            "Uplink for %s carried no recognised fields (keys: %s)",
+            device,
             list(obj.keys()),
         )
         return
 
+    if times:
+        stamps: dict[str, str] = {}
+        for field, candidates in (*_FIELD_KEYS.items(), *_STATUS_KEYS.items()):
+            stamp = next((times[k] for k in candidates if k in times), None)
+            if field in extracted and stamp:
+                stamps[field] = stamp
+        extracted["received_at"] = stamps
+
     result = extracted.get("motor_calibration_result")
     if isinstance(result, str):
         # Release held downlinks before entities react to this uplink.
-        async_finish_calibration(hass, dev_eui, result)
+        async_finish_calibration(hass, device, result)
 
-    async_dispatcher_send(
-        hass, cs_uplink_signal(entry.entry_id, dev_eui), extracted
-    )
+    async_dispatcher_send(hass, uplink_signal(entry.entry_id, device), extracted)
 
 
 def _pick_numeric(obj: dict[str, Any], keys: tuple[str, ...]) -> float | None:

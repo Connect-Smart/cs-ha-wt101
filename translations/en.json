@@ -163,7 +163,7 @@
       "step": {
         "user": {
           "title": "Add a WT101 thermostat",
-          "description": "Set the name and limits. Credentials are inherited from the parent application.\n\nUse **Follow target temperature from** to let a thermostat or helper set the target.\n\nThe WT101 uplink sensors are only shown for TTN hubs: there they bring the WT101's own readings into HA. ChirpStack hubs get these directly from the webhook.",
+          "description": "Set the name and limits. Credentials are inherited from the parent application.\n\nUse **Follow target temperature from** to let a thermostat or helper set the target.\n\nWT101 readings arrive automatically: ChirpStack via the webhook, TTN by reading the application's Storage Integration every minute (enable it in the TTN console). The uplink sensor pickers below are only a fallback for TTN applications without storage.",
           "data": {
             "name": "Name",
             "current_temp_sensor": "WT101 measured temperature — uplink sensor (optional)",

@@ -56,7 +56,7 @@
       "step": {
         "user": {
           "title": "WT101-thermostaat toevoegen",
-          "description": "Stel naam en grenzen in. De gegevens van de application worden hergebruikt.\n\nGebruik **Doeltemperatuur volgen van** om een thermostaat of helper de doeltemperatuur te laten bepalen.\n\nDe WT101-uplink-sensors verschijnen alleen bij TTN-hubs: daar brengen ze de metingen van de WT101 zelf in HA. ChirpStack-hubs krijgen die rechtstreeks via de webhook.",
+          "description": "Stel naam en grenzen in. De gegevens van de application worden hergebruikt.\n\nGebruik **Doeltemperatuur volgen van** om een thermostaat of helper de doeltemperatuur te laten bepalen.\n\nDe metingen van de WT101 komen automatisch binnen: bij ChirpStack via de webhook, bij TTN doordat HA elke minuut de Storage Integration van de application uitleest (zet die aan in de TTN-console). De uplink-sensorkeuzes hieronder zijn alleen een terugvaloptie voor TTN-applications zonder storage.",
           "data": {
             "name": "Naam",
             "current_temp_sensor": "WT101 gemeten temperatuur — uplink-sensor (optioneel)",

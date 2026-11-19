@@ -65,11 +65,10 @@ from .const import (
     DEFAULT_SETPOINT_PRIORITY,
     DEFAULT_TOLERANCE,
     DOMAIN,
-    PLATFORM_CHIRPSTACK,
     PRIORITY_SOURCE,
     SUBENTRY_TYPE_THERMOSTAT,
     WRITABLE_SETPOINT_DOMAINS,
-    cs_uplink_signal,
+    uplink_signal,
 )
 from .lorawan import async_send_downlink, build_target_temperature_payload
 from .setpoint import NO_ACTION, Action, SetpointArbiter, quantize
@@ -246,17 +245,16 @@ class Wt101ClimateEntity(ClimateEntity):
             )
         )
 
-        # ChirpStack uplinks routed via the per-hub webhook update us directly.
-        if self._platform == PLATFORM_CHIRPSTACK:
-            dev_eui = self._subentry.data.get(CONF_CS_DEV_EUI)
-            if dev_eui:
-                self.async_on_remove(
-                    async_dispatcher_connect(
-                        self.hass,
-                        cs_uplink_signal(self._entry.entry_id, dev_eui),
-                        self._handle_uplink,
-                    )
+        # Uplinks (ChirpStack webhook or TTN storage poll) update us directly.
+        key = device_key(self._subentry.data)
+        if key:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    uplink_signal(self._entry.entry_id, key),
+                    self._handle_uplink,
                 )
+            )
 
     # ------------------------------------------------------------------
     # Inputs

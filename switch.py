@@ -39,7 +39,6 @@ from .const import (
     CONF_EXTERNAL_TEMP_SENSOR,
     CONF_EXTERNAL_TIMEOUT,
     CONF_FREEZE_THRESHOLD,
-    CONF_PLATFORM_TYPE,
     CONF_TTN_DEVICE_ID,
     CONF_WINDOW_COOLING_RATE,
     CONF_WINDOW_STOP_TIME,
@@ -53,10 +52,9 @@ from .const import (
     DEFAULT_WINDOW_VALVE_STRATEGY,
     DOMAIN,
     EXTERNAL_OFFLINE_MODES,
-    PLATFORM_CHIRPSTACK,
     SUBENTRY_TYPE_THERMOSTAT,
     WINDOW_VALVE_STRATEGIES,
-    cs_uplink_signal,
+    uplink_signal,
 )
 from .lorawan import (
     async_send_calibration_trigger,
@@ -349,8 +347,8 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
     delivered on its next uplink; pushes are therefore paced to roughly one
     per uplink to keep the LNS queue from growing:
 
-    - ChirpStack with the webhook: one push per received uplink.
-    - Otherwise (TTN, or no uplinks seen): one push per send interval.
+    - One push per received uplink (ChirpStack webhook or TTN storage poll).
+    - Otherwise (no uplinks seen): one push per send interval.
 
     Turning it off sends ``ff c4 00`` so the built-in sensor takes over again.
     """
@@ -503,16 +501,15 @@ class Wt101ExternalSensorSwitch(SwitchEntity, RestoreEntity):
                 self.hass, self._async_tick, timedelta(minutes=1)
             )
         )
-        if self._entry.data.get(CONF_PLATFORM_TYPE) == PLATFORM_CHIRPSTACK:
-            dev_eui = self._subentry.data.get(CONF_CS_DEV_EUI)
-            if dev_eui:
-                self._unsubs.append(
-                    async_dispatcher_connect(
-                        self.hass,
-                        cs_uplink_signal(self._entry.entry_id, dev_eui),
-                        self._handle_uplink,
-                    )
+        key = device_key(self._subentry.data)
+        if key:
+            self._unsubs.append(
+                async_dispatcher_connect(
+                    self.hass,
+                    uplink_signal(self._entry.entry_id, key),
+                    self._handle_uplink,
                 )
+            )
 
     @callback
     def _stop_pushing(self) -> None:
